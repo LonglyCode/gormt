@@ -27,28 +27,42 @@
 ```
 --------
 
-## 1. 通过当前目录 config.yml 文件配置默认配置项
+## 安装
+
 ```
+go get -u -v github.com/xxjwxc/gormt@master
+```
+
+或者: [下载地址](https://github.com/xxjwxc/gormt/releases)
+
+## 1. 通过当前目录 config.yml 文件配置默认配置项
+注意:最新的配置请参考 [MyIni.go](/data/config/MyIni.go), 或使用命令行工具默认生成的。
+
+```yml
 base:
-    is_dev : false
-out_dir : ./model  # 输出目录
-url_tag : json # web url tag(json,db(https://github.com/google/go-querystring))
-language :  # 语言(English,中 文)
-db_tag : gorm # 数据库标签(gorm,db)
-singular_table : false  # 单表模式:true:禁用表名复数,false:采用表明复数 参考:gorm.SingularTable
-simple : false # 简单输出(默认gorm标签不输出)
-is_out_sql : false # 是否输出 sql 原信息
-is_out_func : true # 是否输出 快捷函数
-is_url_tag : true # 是否打web标记
-is_foreign_key : true # 是否导出外键关联
-is_gui : false # 是否ui模式显示
-is_table_name : false # 是否直接生成表名函数
-mysql_info:
+    is_dev: false
+out_dir: ./model  # 输出目录
+url_tag: json # web url tag(json,db(https://github.com/google/go-querystring))
+language: 中 文  # 语言(English,中 文)
+db_tag: gorm # 数据库标签(gorm,db)
+simple: false # 简单输出(默认gorm标签不输出)
+is_out_sql: false # 是否输出 sql 原信息
+is_out_func: true # 是否输出 快捷函数
+is_foreign_key: true # 是否导出外键关联
+is_gui: false  # 是否ui模式显示
+is_table_name: false # 是否直接生成表名,列名
+is_null_to_point: false # 数据库默认 'DEFAULT NULL' 时设置结构为指针类型
+is_web_tag: false
+is_web_tag_pk_hidden: false
+db_info:
     host : 127.0.0.1
     port : 3306
     username : root
     password : qwer
     database : oauth_db
+    type: 0 # 数据库类型:0:mysql , 1:sqlite , 2:mssql
+
+
 ```
 
 ## 2. 可以使用命令行工具更新配置项
@@ -56,7 +70,8 @@ mysql_info:
 ```
 ./gormt -H=127.0.0.1 -d=oauth_db -p=qwer -u=root --port=3306
 ```
-
+命令行工具默认会生成`config.yml`, 具体位置为gormt 可执行文件所在目录。
+可以通过 `which gormt` 查找所在目录。
 ## 3. 查看帮助
 
 ```
@@ -89,7 +104,6 @@ Flags:
 ## 4. 支持gorm 相关属性 
    
 - 数据库表,列字段注释支持
-- singular_table 表名复数(大驼峰)
 - json tag json标签输出
 - gorm.Model 基本模型   [支持gorm.Model模式导出>>>](https://github.com/xxjwxc/gormt/tree/master/doc/export_cn.md)
 - PRIMARY_KEY	将列指定为主键
@@ -99,6 +113,7 @@ Flags:
 - UNIQUE_INDEX	和 INDEX 类似，只不过创建的是唯一索引
 - 支持外键相关属性 [简单带外键模式导出>>>](https://github.com/xxjwxc/gormt/tree/master/doc/export_cn.md)
 - 支持函数导出(包括:外键，关联体，索引关...)[简单函数导出示例>>>](https://github.com/xxjwxc/gormt/blob/master/data/view/genfunc/genfunc_test.go)
+- 支持默认值default 
 
 ### 您可以在这里丰富数据映射类型 [def](data/view/cnf/def.go) 。
 
@@ -182,6 +197,19 @@ or
 go generate
 ```
 
+
+### 说明：windows 不支持中文默认方式。ASCALL 模式
+切换编码方式
+```
+CHCP 65001 
+```
+
+### 表注释 tag
+
+- 给列添加注释以`[@gormt default:'test']`开头即可 
+- 比如`[@gormt default:'test';->;<-:create]这是注释内容` 表示默认值为'test',允许读，更新创建
+
+
 ## 8. 下一步计划
 
 - 更新，删除功能函数添加
@@ -197,7 +225,7 @@ go generate
 
 ![图片描述](/image/gormt/4.jpg)
 
-[下载地址](https://github.com/xxjwxc/gormt/releases/download/v1.1.0/v1.0.zip)
+[下载地址](https://github.com/xxjwxc/gormt/releases/download/v0.3.8/v1.0.zip)
 
 
 - ###### [传送门](https://xxjwxc.github.io/post/gormtools/)

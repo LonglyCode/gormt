@@ -133,6 +133,7 @@ func (s *GenStruct) AddElement(e ...GenElement) {
 	s.Em = append(s.Em, e...)
 }
 
+// GenerateTableName generate table name .生成表名
 func (s *GenStruct) GenerateTableName() []string {
 	tmpl, err := template.New("gen_tnf").Parse(genfunc.GetGenTableNameTemp())
 	if err != nil {
@@ -143,6 +144,47 @@ func (s *GenStruct) GenerateTableName() []string {
 		StructName string
 	}
 	data.TableName, data.StructName = s.TableName, s.Name
+	var buf bytes.Buffer
+	tmpl.Execute(&buf, data)
+	return []string{buf.String()}
+}
+
+// GenerateColumnName generate column name . 生成列名
+func (s *GenStruct) GenerateColumnName() []string {
+	tmpl, err := template.New("gen_tnc").Parse(genfunc.GetGenColumnNameTemp())
+	if err != nil {
+		panic(err)
+	}
+	var data struct {
+		StructName string
+		Em         []struct {
+			ColumnName string
+			StructName string
+		}
+	}
+	data.StructName = s.Name
+	for _, v := range s.Em {
+		if strings.EqualFold(v.Type, "gorm.Model") { // gorm model
+			data.Em = append(data.Em, []struct {
+				ColumnName string
+				StructName string
+			}{
+				{ColumnName: "id", StructName: "ID"},
+				{ColumnName: "created_at", StructName: "CreatedAt"},
+				{ColumnName: "updated_at", StructName: "UpdatedAt"},
+				{ColumnName: "deleted_at", StructName: "DeletedAt"},
+			}...)
+		} else {
+			data.Em = append(data.Em, struct {
+				ColumnName string
+				StructName string
+			}{ColumnName: v.ColumnName,
+				StructName: v.Name,
+			})
+		}
+
+	}
+
 	var buf bytes.Buffer
 	tmpl.Execute(&buf, data)
 	return []string{buf.String()}
@@ -239,6 +281,10 @@ func (p *GenPackage) Generate() string {
 		if config.GetIsTableName() { // add table name func
 			for _, v1 := range v.GenerateTableName() {
 				pa.Add(v1)
+			}
+
+			for _, v2 := range v.GenerateColumnName() { // add column list
+				pa.Add(v2)
 			}
 		}
 	}

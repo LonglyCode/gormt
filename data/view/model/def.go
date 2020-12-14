@@ -12,13 +12,13 @@ const (
 	// ColumnsKeyDefault default
 	ColumnsKeyDefault = iota
 	// ColumnsKeyPrimary primary key.主键
-	ColumnsKeyPrimary
+	ColumnsKeyPrimary // 主键
 	// ColumnsKeyUnique unique key.唯一索引
-	ColumnsKeyUnique
+	ColumnsKeyUnique // unix 唯一索引
 	// ColumnsKeyIndex index key.复合索引
-	ColumnsKeyIndex
+	ColumnsKeyIndex // 可重复 index 索引
 	// ColumnsKeyUniqueIndex unique index key.唯一复合索引
-	ColumnsKeyUniqueIndex
+	ColumnsKeyUniqueIndex // 唯一复合索引
 )
 
 // DBInfo database default info
@@ -38,9 +38,10 @@ type TabInfo struct {
 // ColumnsInfo Columns list .表列信息
 type ColumnsInfo struct {
 	BaseInfo
-	Type           string       // Type.类型标记
-	Index          []KList      // index list.index列表
 	IsNull         bool         // null if db is set null
+	Type           string       // Type.类型标记
+	Gormt          string       // 默认值
+	Index          []KList      // index list.index列表
 	ForeignKeyList []ForeignKey // Foreign key list . 表的外键信息
 }
 
@@ -53,6 +54,7 @@ type ForeignKey struct {
 // KList database index /unique_index list.数据库index /unique_index 列表
 type KList struct {
 	Key     ColumnsKey // non_unique of (show keys from [table])
+	Multi   bool       // Multiple .是否多个(复合组建)
 	KeyName string     // key_name of (show keys from [table])
 }
 

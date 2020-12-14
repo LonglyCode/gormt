@@ -11,13 +11,14 @@ import (
 	"github.com/xxjwxc/gormt/data/view/cnf"
 	"github.com/xxjwxc/gormt/data/view/genfunc"
 	"github.com/xxjwxc/public/mybigcamel"
+	"github.com/xxjwxc/public/tools"
 )
 
 // getCamelName Big Hump or Capital Letter.大驼峰或者首字母大写
 func getCamelName(name string) string {
-	if !config.GetSingularTable() { // If the table name plural is globally disabled.如果全局禁用表名复数
-		return mybigcamel.Marshal(strings.TrimSuffix(name, "s"))
-	}
+	// if !config.GetSingularTable() { // If the table name plural is globally disabled.如果全局禁用表名复数
+	// 	return mybigcamel.Marshal(strings.TrimSuffix(name, "s"))
+	// }
 
 	return mybigcamel.Marshal(name)
 }
@@ -41,24 +42,50 @@ func CapLowercase(name string) string { // IDAPIID == > idAPIID
 		return ""
 	}
 
-	return list[0] + name[len(list[0]):]
+	re := list[0] + name[len(list[0]):]
+
+	return FilterKeywords(re)
+}
+
+func FilterKeywords(src string) string {
+	if tools.IsKeywords(src) {
+		return "_" + src
+	}
+	return src
 }
 
 // getTypeName Type acquisition filtering.类型获取过滤
-func getTypeName(name string) string {
+func getTypeName(name string, isNull bool) string {
 	// Precise matching first.先精确匹配
 	if v, ok := cnf.TypeMysqlDicMp[name]; ok {
-		return v
+		return fixNullToPorint(v, isNull)
 	}
 
 	// Fuzzy Regular Matching.模糊正则匹配
 	for k, v := range cnf.TypeMysqlMatchMp {
 		if ok, _ := regexp.MatchString(k, name); ok {
-			return v
+			return fixNullToPorint(v, isNull)
 		}
 	}
 
 	panic(fmt.Sprintf("type (%v) not match in any way.maybe need to add on (https://github.com/xxjwxc/gormt/blob/master/data/view/cnf/def.go)", name))
+}
+
+// 过滤null point 类型
+func fixNullToPorint(name string, isNull bool) string {
+	if isNull && config.GetIsNullToPoint() {
+		if strings.HasPrefix(name, "uint") {
+			return "*" + name
+		}
+		if strings.HasPrefix(name, "int") {
+			return "*" + name
+		}
+		if strings.HasPrefix(name, "float") {
+			return "*" + name
+		}
+	}
+
+	return name
 }
 
 func getUninStr(left, middle, right string) string {
@@ -185,12 +212,16 @@ func widthFunctionName(info FList) string {
 	case ColumnsKeyPrimary: // primary key.主键
 		return "FetchByPrimaryKey"
 	case ColumnsKeyUnique: // unique key.唯一索引
-		return "FetchByUnique"
+		return "FetchUniqueBy" + getCamelName(info.KeyName)
 	case ColumnsKeyIndex: // index key.复合索引
-		return "FetchBy" + getCamelName(info.KeyName) + "Index"
+		return "FetchIndexBy" + getCamelName(info.KeyName)
 	case ColumnsKeyUniqueIndex: // unique index key.唯一复合索引
-		return "FetchBy" + getCamelName(info.KeyName) + "UniqueIndex"
+		return "FetchUniqueIndexBy" + getCamelName(info.KeyName)
 	}
 
 	return ""
+}
+
+func fixNotes(str string) string { // 注释
+	return strings.Replace(str, "\n", "\n//", -1)
 }

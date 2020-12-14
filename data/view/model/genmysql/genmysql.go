@@ -23,7 +23,7 @@ func (m *mysqlModel) GenModel() model.DBInfo {
 	defer orm.OnDestoryDB()
 
 	var dbInfo model.DBInfo
-	getPackageInfo(orm, &dbInfo)
+	m.getPackageInfo(orm, &dbInfo)
 	dbInfo.PackageName = m.GetPkgName()
 	dbInfo.DbName = m.GetDbName()
 	return dbInfo
@@ -31,7 +31,7 @@ func (m *mysqlModel) GenModel() model.DBInfo {
 
 // GetDbName get database name.获取数据库名字
 func (m *mysqlModel) GetDbName() string {
-	return config.GetMysqlDbInfo().Database
+	return config.GetDbInfo().Database
 }
 
 // GetPkgName package names through config outdir configuration.通过config outdir 配置获取包名
@@ -59,8 +59,8 @@ func (m *mysqlModel) GetPkgName() string {
 	return pkgName
 }
 
-func getPackageInfo(orm *mysqldb.MySqlDB, info *model.DBInfo) {
-	tabls := getTables(orm) // get table and notes
+func (m *mysqlModel) getPackageInfo(orm *mysqldb.MySqlDB, info *model.DBInfo) {
+	tabls := m.getTables(orm) // get table and notes
 	// if m := config.GetTableList(); len(m) > 0 {
 	// 	// 制定了表之后
 	// 	newTabls := make(map[string]string)
@@ -80,7 +80,7 @@ func getPackageInfo(orm *mysqldb.MySqlDB, info *model.DBInfo) {
 
 		if config.GetIsOutSQL() {
 			// Get create SQL statements.获取创建sql语句
-			rows, err := orm.Raw("show create table " + tabName).Rows()
+			rows, err := orm.Raw("show create table " + assemblyTable(tabName)).Rows()
 			//defer rows.Close()
 			if err == nil {
 				if rows.Next() {
@@ -94,7 +94,7 @@ func getPackageInfo(orm *mysqldb.MySqlDB, info *model.DBInfo) {
 		}
 
 		// build element.构造元素
-		tab.Em = getTableElement(orm, tabName)
+		tab.Em = m.getTableElement(orm, tabName)
 		// --------end
 
 		info.TabList = append(info.TabList, tab)
@@ -106,19 +106,21 @@ func getPackageInfo(orm *mysqldb.MySqlDB, info *model.DBInfo) {
 }
 
 // getTableElement Get table columns and comments.获取表列及注释
-func getTableElement(orm *mysqldb.MySqlDB, tab string) (el []model.ColumnsInfo) {
-	keyNums := make(map[string]int)
+func (m *mysqlModel) getTableElement(orm *mysqldb.MySqlDB, tab string) (el []model.ColumnsInfo) {
+	keyNameCount := make(map[string]int)
+	KeyColumnMp := make(map[string][]keys)
 	// get keys
 	var Keys []keys
-	orm.Raw("show keys from " + tab).Scan(&Keys)
+	orm.Raw("show keys from " + assemblyTable(tab)).Scan(&Keys)
 	for _, v := range Keys {
-		keyNums[v.KeyName]++
+		keyNameCount[v.KeyName]++
+		KeyColumnMp[v.ColumnName] = append(KeyColumnMp[v.ColumnName], v)
 	}
 	// ----------end
 
 	var list []genColumns
 	// Get table annotations.获取表注释
-	orm.Raw("show FULL COLUMNS from " + tab).Scan(&list)
+	orm.Raw("show FULL COLUMNS from " + assemblyTable(tab)).Scan(&list)
 	// filter gorm.Model.过滤 gorm.Model
 	if filterModel(&list) {
 		el = append(el, model.ColumnsInfo{
@@ -130,39 +132,48 @@ func getTableElement(orm *mysqldb.MySqlDB, tab string) (el []model.ColumnsInfo) 
 	// ForeignKey
 	var foreignKeyList []genForeignKey
 	if config.GetIsForeignKey() {
-		orm.Raw(fmt.Sprintf(`select table_schema,table_name,column_name,referenced_table_schema,referenced_table_name,referenced_column_name from INFORMATION_SCHEMA.KEY_COLUMN_USAGE
-		where table_schema = '%v' AND REFERENCED_TABLE_NAME IS NOT NULL AND TABLE_NAME = '%v'`, config.GetMysqlDbInfo().Database, tab)).Scan(&foreignKeyList)
+		sql := fmt.Sprintf(`select table_schema as table_schema,table_name as table_name,column_name as column_name,referenced_table_schema as referenced_table_schema,referenced_table_name as referenced_table_name,referenced_column_name as referenced_column_name
+		from INFORMATION_SCHEMA.KEY_COLUMN_USAGE where table_schema = '%v' AND REFERENCED_TABLE_NAME IS NOT NULL AND TABLE_NAME = '%v'`, m.GetDbName(), tab)
+		orm.Raw(sql).Scan(&foreignKeyList)
 	}
 	// ------------------end
 
 	for _, v := range list {
 		var tmp model.ColumnsInfo
 		tmp.Name = v.Field
-		tmp.Notes = v.Desc
 		tmp.Type = v.Type
+		FixElementTag(&tmp, v.Desc) // 分析表注释
 
 		// keys
-		if strings.EqualFold(v.Key, "PRI") { // Set primary key.设置主键
-			tmp.Index = append(tmp.Index, model.KList{
-				Key: model.ColumnsKeyPrimary,
-			})
-		} else if strings.EqualFold(v.Key, "UNI") { // unique
-			tmp.Index = append(tmp.Index, model.KList{
-				Key: model.ColumnsKeyUnique,
-			})
-		} else {
-			for _, v1 := range Keys {
-				if strings.EqualFold(v1.ColumnName, v.Field) {
-					var k model.KList
-					if v1.NonUnique == 1 { // index
-						k.Key = model.ColumnsKeyIndex
-					} else {
-						k.Key = model.ColumnsKeyUniqueIndex
+		if keylist, ok := KeyColumnMp[v.Field]; ok { // maybe have index or key
+			for _, v := range keylist {
+				if v.NonUnique == 0 { // primary or unique
+					if strings.EqualFold(v.KeyName, "PRIMARY") { // PRI Set primary key.设置主键
+						tmp.Index = append(tmp.Index, model.KList{
+							Key:   model.ColumnsKeyPrimary,
+							Multi: (keyNameCount[v.KeyName] > 1),
+						})
+					} else { // unique
+						if keyNameCount[v.KeyName] > 1 {
+							tmp.Index = append(tmp.Index, model.KList{
+								Key:     model.ColumnsKeyUniqueIndex,
+								Multi:   (keyNameCount[v.KeyName] > 1),
+								KeyName: v.KeyName,
+							})
+						} else { // unique index key.唯一复合索引
+							tmp.Index = append(tmp.Index, model.KList{
+								Key:     model.ColumnsKeyUnique,
+								Multi:   (keyNameCount[v.KeyName] > 1),
+								KeyName: v.KeyName,
+							})
+						}
 					}
-					if keyNums[v1.KeyName] > 1 { // Composite index.复合索引
-						k.KeyName = v1.KeyName
-					}
-					tmp.Index = append(tmp.Index, k)
+				} else { // mut
+					tmp.Index = append(tmp.Index, model.KList{
+						Key:     model.ColumnsKeyIndex,
+						Multi:   true,
+						KeyName: v.KeyName,
+					})
 				}
 			}
 		}
@@ -178,7 +189,7 @@ func getTableElement(orm *mysqldb.MySqlDB, tab string) (el []model.ColumnsInfo) 
 }
 
 // getTables Get columns and comments.获取表列及注释
-func getTables(orm *mysqldb.MySqlDB) map[string]string {
+func (m *mysqlModel) getTables(orm *mysqldb.MySqlDB) map[string]string {
 	tbDesc := make(map[string]string)
 
 	// Get column names.获取列名
@@ -201,7 +212,7 @@ func getTables(orm *mysqldb.MySqlDB) map[string]string {
 	rows.Close()
 
 	// Get table annotations.获取表注释
-	rows1, err := orm.Raw("SELECT TABLE_NAME,TABLE_COMMENT FROM information_schema.TABLES WHERE table_schema= '" + config.GetMysqlDbInfo().Database + "'").Rows()
+	rows1, err := orm.Raw("SELECT TABLE_NAME,TABLE_COMMENT FROM information_schema.TABLES WHERE table_schema= '" + m.GetDbName() + "'").Rows()
 	if err != nil {
 		if !config.GetIsGUI() {
 			fmt.Println(err)
@@ -217,4 +228,8 @@ func getTables(orm *mysqldb.MySqlDB) map[string]string {
 	rows1.Close()
 
 	return tbDesc
+}
+
+func assemblyTable(name string) string {
+	return "`" + name + "`"
 }

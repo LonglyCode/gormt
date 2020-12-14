@@ -8,50 +8,51 @@ import (
 
 // Config custom config struct
 type Config struct {
-	CfgBase       `yaml:"base"`
-	MySQLInfo     MysqlDbInfo `yaml:"mysql_info"`
-	OutDir        string      `yaml:"out_dir"`
-	URLTag        string      `yaml:"url_tag"`  // url tag
-	Language      string      `yaml:"language"` // language
-	DbTag         string      `yaml:"db_tag"`   // 数据库标签（gormt,db）
-	Simple        bool        `yaml:"simple"`
-	IsWEBTag      bool        `yaml:"is_web_tag"`
-	SingularTable bool        `yaml:"singular_table"`
-	IsForeignKey  bool        `yaml:"is_foreign_key"`
-	IsOutSQL      bool        `yaml:"is_out_sql"`
-	IsOutFunc     bool        `yaml:"is_out_func"`
-	IsGUI         bool        `yaml:"is_gui"` //
-	IsTableName   bool        `yaml:"is_table_name"`
-	OutFileName   string      `yaml:"-"`
+	CfgBase          `yaml:"base"`
+	DBInfo           DBInfo `yaml:"db_info"`
+	OutDir           string `yaml:"out_dir"`
+	URLTag           string `yaml:"url_tag"`  // url tag
+	Language         string `yaml:"language"` // language
+	DbTag            string `yaml:"db_tag"`   // 数据库标签（gormt,db）
+	Simple           bool   `yaml:"simple"`
+	IsWEBTag         bool   `yaml:"is_web_tag"`
+	IsWebTagPkHidden bool   `yaml:"is_web_tag_pk_hidden"` // web标记是否隐藏主键
+	IsForeignKey     bool   `yaml:"is_foreign_key"`
+	IsOutSQL         bool   `yaml:"is_out_sql"`
+	IsOutFunc        bool   `yaml:"is_out_func"`
+	IsGUI            bool   `yaml:"is_gui"` //
+	IsTableName      bool   `yaml:"is_table_name"`
+	IsNullToPoint    bool   `yaml:"is_null_to_point"` // null to porint
 }
 
-// MysqlDbInfo mysql database information. mysql 数据库信息
-type MysqlDbInfo struct {
+// DBInfo mysql database information. mysql 数据库信息
+type DBInfo struct {
 	Host     string `validate:"required"` // Host. 地址
-	Port     int    `validate:"required"` // Port 端口号
-	Username string `validate:"required"` // Username 用户名
+	Port     int    // Port 端口号
+	Username string // Username 用户名
 	Password string // Password 密码
-	Database string `validate:"required"` // Database 数据库名
+	Database string // Database 数据库名
+	Type     int    // 数据库类型: 0:mysql , 1:sqlite , 2:mssql
 }
 
 // SetMysqlDbInfo Update MySQL configuration information
-func SetMysqlDbInfo(info *MysqlDbInfo) {
-	_map.MySQLInfo = *info
+func SetMysqlDbInfo(info *DBInfo) {
+	_map.DBInfo = *info
 }
 
-// GetMysqlDbInfo Get MySQL configuration information .获取mysql配置信息
-func GetMysqlDbInfo() MysqlDbInfo {
-	return _map.MySQLInfo
+// GetDbInfo Get configuration information .获取数据配置信息
+func GetDbInfo() DBInfo {
+	return _map.DBInfo
 }
 
 // GetMysqlConStr Get MySQL connection string.获取mysql 连接字符串
 func GetMysqlConStr() string {
 	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?charset=utf8&parseTime=True&loc=Local&interpolateParams=True",
-		_map.MySQLInfo.Username,
-		_map.MySQLInfo.Password,
-		_map.MySQLInfo.Host,
-		_map.MySQLInfo.Port,
-		_map.MySQLInfo.Database,
+		_map.DBInfo.Username,
+		_map.DBInfo.Password,
+		_map.DBInfo.Host,
+		_map.DBInfo.Port,
+		_map.DBInfo.Database,
 	)
 }
 
@@ -69,15 +70,15 @@ func GetOutDir() string {
 	return _map.OutDir
 }
 
-// SetSingularTable Set Disabled Table Name Plurals.设置禁用表名复数
-func SetSingularTable(b bool) {
-	_map.SingularTable = b
-}
+// // SetSingularTable Set Disabled Table Name Plurals.设置禁用表名复数
+// func SetSingularTable(b bool) {
+// 	_map.SingularTable = b
+// }
 
-// GetSingularTable Get Disabled Table Name Plurals.获取禁用表名复数
-func GetSingularTable() bool {
-	return _map.SingularTable
-}
+// // GetSingularTable Get Disabled Table Name Plurals.获取禁用表名复数
+// func GetSingularTable() bool {
+// 	return _map.SingularTable
+// }
 
 // GetSimple simple output.简单输出
 func GetSimple() bool {
@@ -92,6 +93,11 @@ func SetSimple(b bool) {
 // GetIsWEBTag json tag.json标记
 func GetIsWEBTag() bool {
 	return _map.IsWEBTag
+}
+
+// GetIsWebTagPkHidden web tag是否隐藏主键
+func GetIsWebTagPkHidden() bool {
+	return _map.IsWebTagPkHidden
 }
 
 // GetIsForeignKey if is foreign key
@@ -144,14 +150,6 @@ func SetIsTableName(b bool) {
 	_map.IsTableName = b
 }
 
-func SetOutFileName(f string) {
-	_map.OutFileName = f
-}
-
-func GetOutFileName() string {
-	return _map.OutFileName
-}
-
 // GetURLTag get url tag.
 func GetURLTag() string {
 	if _map.URLTag != "json" && _map.URLTag != "url" {
@@ -196,4 +194,14 @@ func GetDBTag() string {
 // SetDBTag get database tag.
 func SetDBTag(s string) {
 	_map.DbTag = s
+}
+
+// SetIsNullToPoint if with null to porint in struct
+func SetIsNullToPoint(b bool) {
+	_map.IsNullToPoint = b
+}
+
+// GetIsNullToPoint get if with null to porint in sturct
+func GetIsNullToPoint() bool {
+	return _map.IsNullToPoint
 }

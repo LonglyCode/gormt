@@ -75,23 +75,25 @@ func (m *_Model) genTableElement(cols []ColumnsInfo) (el []genstruct.GenElement)
 
 	for _, v := range cols {
 		var tmp genstruct.GenElement
+		var isPK bool
 		if strings.EqualFold(v.Type, "gorm.Model") { // gorm model
 			tmp.SetType(v.Type) //
 		} else {
 			tmp.SetName(getCamelName(v.Name))
 			tmp.SetNotes(v.Notes)
-			tmp.SetType(getTypeName(v.Type))
+			tmp.SetType(getTypeName(v.Type, v.IsNull))
 			for _, v1 := range v.Index {
 				switch v1.Key {
 				// case ColumnsKeyDefault:
 				case ColumnsKeyPrimary: // primary key.主键
-					tmp.AddTag(_tagGorm, "primary_key")
+					tmp.AddTag(_tagGorm, "primaryKey")
+					isPK = true
 				case ColumnsKeyUnique: // unique key.唯一索引
 					tmp.AddTag(_tagGorm, "unique")
 				case ColumnsKeyIndex: // index key.复合索引
 					tmp.AddTag(_tagGorm, getUninStr("index", ":", v1.KeyName))
 				case ColumnsKeyUniqueIndex: // unique index key.唯一复合索引
-					tmp.AddTag(_tagGorm, getUninStr("unique_index", ":", v1.KeyName))
+					tmp.AddTag(_tagGorm, getUninStr("uniqueIndex", ":", v1.KeyName))
 				}
 			}
 		}
@@ -105,17 +107,23 @@ func (m *_Model) genTableElement(cols []ColumnsInfo) (el []genstruct.GenElement)
 					tmp.AddTag(_tagGorm, "not null")
 				}
 			}
+			// default tag
+			if len(v.Gormt) > 0 {
+				tmp.AddTag(_tagGorm, v.Gormt)
+			}
 
 			// json tag
 			if config.GetIsWEBTag() {
-				if strings.EqualFold(v.Name, "id") {
+				if isPK && config.GetIsWebTagPkHidden() {
 					tmp.AddTag(_tagJSON, "-")
 				} else {
 					tmp.AddTag(_tagJSON, mybigcamel.UnMarshal(v.Name))
 				}
 			}
+
 		}
 
+		tmp.ColumnName = v.Name // 列名
 		el = append(el, tmp)
 
 		// ForeignKey
@@ -147,8 +155,8 @@ func (m *_Model) genForeignKey(col ColumnsInfo) (fklist []genstruct.GenElement) 
 				tmp.SetType(getCamelName(v.TableName))
 			}
 
-			tmp.AddTag(_tagGorm, "association_foreignkey:"+col.Name)
-			tmp.AddTag(_tagGorm, "foreignkey:"+v.ColumnName)
+			tmp.AddTag(_tagGorm, "joinForeignKey:"+col.Name) // association_foreignkey
+			tmp.AddTag(_tagGorm, "foreignKey:"+v.ColumnName)
 
 			// json tag
 			if config.GetIsWEBTag() {
@@ -172,7 +180,9 @@ func (m *_Model) getColumnsKeyMulti(tableName, col string) (isMulti bool, isFind
 						switch v2.Key {
 						case ColumnsKeyPrimary, ColumnsKeyUnique, ColumnsKeyUniqueIndex: // primary key unique key . 主键，唯一索引
 							{
-								return false, true, v.Notes
+								if !v2.Multi { // 唯一索引
+									return false, true, v.Notes
+								}
 							}
 							// case ColumnsKeyIndex: // index key. 复合索引
 							// 	{
@@ -226,8 +236,9 @@ func (m *_Model) generateFunc() (genOut []GenOutInfo) {
 	for _, tab := range m.info.TabList {
 		var pkg genstruct.GenPackage
 		pkg.SetPackage(m.info.PackageName) //package name
-		pkg.AddImport(`"github.com/jinzhu/gorm"`)
 		pkg.AddImport(`"fmt"`)
+		pkg.AddImport(`"context"`) // 添加import信息
+		pkg.AddImport(cnf.EImportsHead["gorm.Model"])
 
 		data := funDef{
 			StructName: getCamelName(tab.Name),
@@ -241,28 +252,35 @@ func (m *_Model) generateFunc() (genOut []GenOutInfo) {
 				pkg.AddImport(`"time"`)
 				buildFList(&primary, ColumnsKeyPrimary, "", "int64", "id")
 			} else {
-				typeName := getTypeName(el.Type)
-				isMulti := true
+				typeName := getTypeName(el.Type, el.IsNull)
+				isMulti := (len(el.Index) == 0)
+				isUniquePrimary := false
 				for _, v1 := range el.Index {
+					if v1.Multi {
+						isMulti = v1.Multi
+					}
+
 					switch v1.Key {
 					// case ColumnsKeyDefault:
 					case ColumnsKeyPrimary: // primary key.主键
-						isMulti = false
-						buildFList(&primary, ColumnsKeyPrimary, "", typeName, el.Name)
+						isUniquePrimary = !v1.Multi
+						buildFList(&primary, ColumnsKeyPrimary, v1.KeyName, typeName, el.Name)
 					case ColumnsKeyUnique: // unique key.唯一索引
-						isMulti = false
-						buildFList(&unique, ColumnsKeyUnique, "", typeName, el.Name)
+						buildFList(&unique, ColumnsKeyUnique, v1.KeyName, typeName, el.Name)
 					case ColumnsKeyIndex: // index key.复合索引
 						buildFList(&index, ColumnsKeyIndex, v1.KeyName, typeName, el.Name)
 					case ColumnsKeyUniqueIndex: // unique index key.唯一复合索引
-						isMulti = false
 						buildFList(&uniqueIndex, ColumnsKeyUniqueIndex, v1.KeyName, typeName, el.Name)
 					}
 				}
 
+				if isMulti && isUniquePrimary { // 主键唯一
+					isMulti = false
+				}
+
 				data.Em = append(data.Em, EmInfo{
 					IsMulti:       isMulti,
-					Notes:         el.Notes,
+					Notes:         fixNotes(el.Notes),
 					Type:          typeName, // Type.类型标记
 					ColName:       el.Name,
 					ColStructName: getCamelName(el.Name),
@@ -280,7 +298,7 @@ func (m *_Model) generateFunc() (genOut []GenOutInfo) {
 				if isFind {
 					var info PreloadInfo
 					info.IsMulti = isMulti
-					info.Notes = notes
+					info.Notes = fixNotes(notes)
 					info.ForeignkeyTableName = v.TableName
 					info.ForeignkeyCol = v.ColumnName
 					info.ForeignkeyStructName = getCamelName(v.TableName)

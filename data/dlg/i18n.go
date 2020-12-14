@@ -54,6 +54,9 @@ func addChinese() error {
 		ID:    "out_dir",
 		Other: " 输 出 目 录 :",
 	}, &i18n.Message{
+		ID:    "db_type",
+		Other: " 数 据 库 类 型 :",
+	}, &i18n.Message{
 		ID:    "db_host",
 		Other: " 数 据 库 地 址 :",
 	}, &i18n.Message{
@@ -71,9 +74,6 @@ func addChinese() error {
 	}, &i18n.Message{
 		ID:    "is_dev",
 		Other: " 开 发 模 式:",
-	}, &i18n.Message{
-		ID:    "is_singular",
-		Other: " 单 表 模 式 :",
 	}, &i18n.Message{
 		ID:    "is_simple",
 		Other: " 简 单 输 出 :",
@@ -148,6 +148,9 @@ func addEnglish() error {
 		ID:    "out_dir",
 		Other: "out dir:",
 	}, &i18n.Message{
+		ID:    "db_type",
+		Other: " db type:",
+	}, &i18n.Message{
 		ID:    "db_host",
 		Other: "db host:",
 	}, &i18n.Message{
@@ -168,9 +171,6 @@ func addEnglish() error {
 	}, &i18n.Message{
 		ID:    "is_simple",
 		Other: "is simple :",
-	}, &i18n.Message{
-		ID:    "is_singular",
-		Other: "is singular :",
 	}, &i18n.Message{
 		ID:    "is_out_sql",
 		Other: "is out sql :",

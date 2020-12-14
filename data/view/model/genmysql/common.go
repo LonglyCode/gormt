@@ -47,8 +47,19 @@ func fixForeignKey(list []genForeignKey, columuName string, result *[]model.Fore
 	}
 }
 
-// GetMysqlModel get model interface. 获取model接口
-func GetMysqlModel() model.IModel {
+// GetModel get model interface. 获取model接口
+func GetModel() model.IModel {
 	//now just support mysql
 	return &MySQLModel
+}
+
+// FixElementTag 分析元素表注释
+func FixElementTag(em *model.ColumnsInfo, note string) {
+	matches := noteRegex.FindStringSubmatch(note)
+	if len(matches) < 2 {
+		em.Notes = note
+		return
+	}
+	em.Notes = note[len(matches[0]):]
+	em.Gormt = matches[1]
 }

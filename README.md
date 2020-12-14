@@ -3,11 +3,11 @@
 [![GoDoc](https://godoc.org/github.com/xxjwxc/gormt?status.svg)](https://godoc.org/github.com/xxjwxc/gormt)
 [![Mentioned in Awesome Go](https://awesome.re/mentioned-badge.svg)](https://github.com/avelino/awesome-go) 
  
-# [gormt](https://github.com/xxjwxc/gormt)
-
 ## [中文文档](README_zh_cn.md)
 
-###  mysql database to goang struct conversion tools base on [gorm](https://github.com/jinzhu/gorm)，You can automatically generate golang sturct from MySQL database. big Camel-Case Name Rule, JSON tag. 
+###  mysql database to golang struct conversion tools base on [gorm(v1/v2)](https://github.com/go-gorm/gorm)，You can automatically generate golang sturct from mysql database. big Camel-Case Name Rule, JSON tag. 
+
+
 
 ## gui support
 
@@ -23,29 +23,42 @@
 ```
 ./gormt -g=false
 ```
+
+## install
+
+```
+go get -u -v github.com/xxjwxc/gormt@master
+```
+
+or: [Dowloading](https://github.com/xxjwxc/gormt/releases)
+
 --------
 
 ## 1. Configure default configuration items through the current directory config.yml file
-```
-out_dir : "."  # out dir
+note: for latest version of config format, please check /data/config/MyIni.go
+```yml
+out_dir : "./model"  # out dir
 url_tag : json # web url tag(json,db(https://github.com/google/go-querystring))
 language :  # language(English,中 文)
 db_tag : gorm # DB tag(gorm,db)
-singular_table : true  # Table name plural (big Camel-Case):gorm.SingularTable
 simple : false #simple output
 is_out_sql : false # Whether to output sql
 is_out_func : true # Whether to output function
-is_url_tag : true # Whether to mark web or not
 is_foreign_key : true # Whether to mark foreign key or not
 is_gui : false # Whether to operate on gui
-is_table_name : false # Whether to out GetTableName function
+is_table_name : false # Whether to out GetTableName/column function
+is_null_to_point : false # database is 'DEFAULT NULL' then set element type as point
+is_web_tag: false
+is_web_tag_pk_hidden: false
 
-mysql_info :
+db_info :
     host : "127.0.0.1"
     port : 3306
     username : "root"
     password : "qwer"
     database : "oauth_db"
+    type: 0 # database type (0:mysql , 1:sqlite , 2:mssql)
+
 
 ```
 ## 2. get help
@@ -83,7 +96,6 @@ Flags:
 ## 4. Support for gorm attributes
    
 - Database tables, column field annotation support
-- singular_table, Table name plural (big Camel-Case)
 - json tag json tag output
 - gorm.Model [Support export gorm.model>>>](doc/export.md)
 - PRIMARY_KEY	Specifies column as primary key
@@ -176,9 +188,16 @@ or
 go generate
 ```
 
-## 8. Next step 
-- update，delete support
-- revew
+### 8 note : in windows not support utf-8 style . ASCALL model
+- Switch encoding mode
+```
+CHCP 65001 
+```
+
+### table notes default
+
+- Add a comment to the column starting with `[@gormt default:'test']`
+- example `[@gormt default:'test';->;<-:create]this is my notes` Indicates that the default value is 'test',can read/creat/write
 
 ## 9. one windows gui tools
 
@@ -190,7 +209,7 @@ go generate
 
 ![4](/image/gormt/4.jpg)
 
-[Download](https://github.com/xxjwxc/gormt/releases/download/v1.1.0/v1.0.zip)
+[Download](https://github.com/xxjwxc/gormt/releases/download/v0.3.8/v1.0.zip)
 
 
 

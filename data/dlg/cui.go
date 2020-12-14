@@ -203,25 +203,24 @@ func enterSet(g *gocui.Gui, v *gocui.View) error {
 	// add input field
 	form.AddInputField("out_dir", SLocalize("out_dir"), formPart[0], formPart[1]).SetText(config.GetOutDir()).
 		AddValidate("required input", requireValidator)
-	form.AddInputField("db_host", SLocalize("db_host"), formPart[0], formPart[1]).SetText(config.GetMysqlDbInfo().Host).
+	form.AddInputField("db_host", SLocalize("db_host"), formPart[0], formPart[1]).SetText(config.GetDbInfo().Host).
 		AddValidate("required input", requireValidator)
-	form.AddInputField("db_port", SLocalize("db_port"), formPart[0], formPart[1]).SetText(tools.AsString(config.GetMysqlDbInfo().Port)).
+	form.AddInputField("db_port", SLocalize("db_port"), formPart[0], formPart[1]).SetText(tools.AsString(config.GetDbInfo().Port)).
 		AddValidate("required input", requireValidator)
-	form.AddInputField("db_usename", SLocalize("db_usename"), formPart[0], formPart[1]).SetText(config.GetMysqlDbInfo().Username).
+	form.AddInputField("db_usename", SLocalize("db_usename"), formPart[0], formPart[1]).SetText(config.GetDbInfo().Username).
 		AddValidate("required input", requireValidator)
-	form.AddInputField("db_pwd", SLocalize("db_pwd"), formPart[0], formPart[1]).SetText(config.GetMysqlDbInfo().Password).
+	form.AddInputField("db_pwd", SLocalize("db_pwd"), formPart[0], formPart[1]).SetText(config.GetDbInfo().Password).
 		SetMask().SetMaskKeybinding(gocui.KeyCtrlA).
 		AddValidate("required input", requireValidator)
-	form.AddInputField("db_name", SLocalize("db_name"), formPart[0], formPart[1]).SetText(config.GetMysqlDbInfo().Database).
+	form.AddInputField("db_name", SLocalize("db_name"), formPart[0], formPart[1]).SetText(config.GetDbInfo().Database).
 		AddValidate("required input", requireValidator)
-
+	form.AddSelect("db_type", SLocalize("db_type"), formPart[0], formPart[2]).AddOptions(getDBTypeList()...).
+		SetSelected(GetDBTypeStr(config.GetDbInfo().Type))
 	// add select
 	form.AddSelect("is_dev", SLocalize("is_dev"), formPart[0], formPart[2]).
 		AddOptions(SLocalize("true"), SLocalize("false")).SetSelected(SLocalize(tools.AsString(config.GetIsDev())))
 	form.AddSelect("is_simple", SLocalize("is_simple"), formPart[0], formPart[2]).
 		AddOptions(SLocalize("true"), SLocalize("false")).SetSelected(SLocalize(tools.AsString(config.GetSimple())))
-	form.AddSelect("is_singular", SLocalize("is_singular"), formPart[0], formPart[2]).
-		AddOptions(SLocalize("true"), SLocalize("false")).SetSelected(SLocalize(tools.AsString(config.GetSingularTable())))
 	form.AddSelect("is_out_sql", SLocalize("is_out_sql"), formPart[0], formPart[2]).
 		AddOptions(SLocalize("true"), SLocalize("false")).SetSelected(SLocalize(tools.AsString(config.GetIsOutSQL())))
 	form.AddSelect("is_out_func", SLocalize("is_out_func"), formPart[0], formPart[2]).
@@ -264,7 +263,7 @@ func buttonSave(g *gocui.Gui, v *gocui.View) error {
 	mp := form.GetFieldTexts()
 	config.SetOutDir(mp["out_dir"])
 
-	var dbInfo config.MysqlDbInfo
+	var dbInfo config.DBInfo
 	dbInfo.Host = mp["db_host"]
 	port, err := strconv.Atoi(mp["db_port"])
 	if err != nil {
@@ -286,12 +285,13 @@ func buttonSave(g *gocui.Gui, v *gocui.View) error {
 	dbInfo.Username = mp["db_usename"]
 	dbInfo.Password = mp["db_pwd"]
 	dbInfo.Database = mp["db_name"]
-
-	config.SetMysqlDbInfo(&dbInfo)
 	mp = form.GetSelectedOpts()
+
+	dbInfo.Type = GetDBTypeID(mp["db_type"])
+	config.SetMysqlDbInfo(&dbInfo)
+
 	config.SetIsDev(getBool(mp["is_dev"]))
 	config.SetSimple(getBool(mp["is_simple"]))
-	config.SetSingularTable(getBool(mp["is_singular"]))
 	config.SetIsOutSQL(getBool(mp["is_out_sql"]))
 	config.SetIsOutFunc(getBool(mp["is_out_func"]))
 	config.SetForeignKey(getBool(mp["is_foreign_key"]))
@@ -389,6 +389,7 @@ func listUp(g *gocui.Gui, v *gocui.View) error {
 // OnInitDialog init main loop
 func OnInitDialog() {
 	g, err := gocui.NewGui(gocui.OutputNormal)
+	g.ASCII = true
 
 	if err != nil {
 		log.Panicln(err)
@@ -407,4 +408,36 @@ func OnInitDialog() {
 	if err := g.MainLoop(); err != nil && err != gocui.ErrQuit { // 主循环
 		log.Panicln(err)
 	}
+}
+
+// GetDBTypeStr 0:mysql , 1:sqlite , 2:mssql
+func GetDBTypeStr(tp int) string {
+	switch tp {
+	case 0:
+		return "mysql"
+	case 1:
+		return "sqlite"
+	case 2:
+		return "mssql"
+	}
+	// default
+	return "mysql"
+}
+
+// GetDBTypeID 0:mysql , 1:sqlite , 2:mssql
+func GetDBTypeID(name string) int {
+	switch name {
+	case "mysql":
+		return 0
+	case "sqlite":
+		return 1
+	case "mssql":
+		return 2
+	}
+	// default
+	return 0
+}
+
+func getDBTypeList() []string {
+	return []string{"mysql", "sqlite", "mssql"}
 }

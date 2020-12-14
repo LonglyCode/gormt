@@ -24,30 +24,30 @@ var _map = Config{
 	CfgBase: CfgBase{
 		IsDev: false,
 	},
-	MySQLInfo: MysqlDbInfo{
+	DBInfo: DBInfo{
 		Host:     "127.0.0.1",
 		Port:     3306,
 		Username: "root",
 		Password: "root",
 		Database: "test",
 	},
-	OutDir:        "./model",
-	URLTag:        "json",
-	Language:      "中 文",
-	DbTag:         "gorm",
-	Simple:        false,
-	IsWEBTag:      false,
-	SingularTable: true,
-	IsForeignKey:  true,
-	IsOutSQL:      false,
-	IsOutFunc:     true,
-	IsGUI:         false,
+	OutDir:   "./model",
+	URLTag:   "json",
+	Language: "中 文",
+	DbTag:    "gorm",
+	Simple:   false,
+	IsWEBTag: false,
+	// SingularTable: true,
+	IsForeignKey: true,
+	IsOutSQL:     false,
+	IsOutFunc:    true,
+	IsGUI:        false,
 }
 
 var configPath string
 
 func init() {
-	configPath = path.Join(tools.GetModelPath(), "config.yml")
+	configPath = path.Join(tools.GetCurrentDirectory(), "config.yml")
 	onInit()
 	dev.OnSetDev(_map.IsDev)
 }
@@ -65,11 +65,12 @@ func InitFile(filename string) error {
 	if _, e := os.Stat(filename); e != nil {
 		fmt.Println("init default config file: ", filename)
 		if err := SaveToFile(); err == nil {
-			fmt.Println("done,please restart.")
+			InitFile(filename)
+			return nil
 		} else {
 			fmt.Println("shit,fail", err)
 		}
-		os.Exit(0)
+		// os.Exit(0)
 	}
 	bs, err := ioutil.ReadFile(filename)
 	if err != nil {

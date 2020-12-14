@@ -4,12 +4,15 @@ import (
 	"fmt"
 	"os/exec"
 
+	"github.com/xxjwxc/public/mylog"
+
 	"github.com/xxjwxc/gormt/data/dlg"
 	"github.com/xxjwxc/gormt/data/view/model"
 
 	"github.com/xxjwxc/gormt/data/config"
 
 	"github.com/xxjwxc/gormt/data/view/model/genmysql"
+	"github.com/xxjwxc/gormt/data/view/model/gensqlite"
 	"github.com/xxjwxc/public/tools"
 )
 
@@ -27,8 +30,20 @@ func showCmd() {
 	// tt.Nickname = "ticket_001"
 	// orm.Where("nickname = ?", "ticket_001").Find(&tt)
 	// fmt.Println(tt)
-	modeldb := genmysql.GetMysqlModel()
+	var modeldb model.IModel
+	switch config.GetDbInfo().Type {
+	case 0:
+		modeldb = genmysql.GetModel()
+	case 1:
+		modeldb = gensqlite.GetModel()
+	}
+	if modeldb == nil {
+		mylog.Error(fmt.Errorf("modeldb not fund : please check db_info.type (0:mysql , 1:sqlite , 2:mssql) "))
+		return
+	}
+
 	pkg := modeldb.GenModel()
+	// gencnf.GenOutPut(&pkg)
 	// just for test
 	// out, _ := json.Marshal(pkg)
 	// tools.WriteFile("test.txt", []string{string(out)}, true)
@@ -39,12 +54,12 @@ func showCmd() {
 		path := config.GetOutDir() + "/" + v.FileName
 		tools.WriteFile(path, []string{v.FileCtx}, true)
 
-		fmt.Println("formatting differs from goimport's:")
+		mylog.Info("formatting differs from goimport's:")
 		cmd, _ := exec.Command("goimports", "-l", "-w", path).Output()
-		fmt.Println(string(cmd))
+		mylog.Info(string(cmd))
 
-		fmt.Println("formatting differs from gofmt's:")
+		mylog.Info("formatting differs from gofmt's:")
 		cmd, _ = exec.Command("gofmt", "-l", "-w", path).Output()
-		fmt.Println(string(cmd))
+		mylog.Info(string(cmd))
 	}
 }
