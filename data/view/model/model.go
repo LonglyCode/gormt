@@ -321,7 +321,8 @@ func (m *_Model) generateFunc() (genOut []GenOutInfo) {
 		tmpl, err := template.New("gen_logic").
 			Funcs(template.FuncMap{
 				"GenPreloadList": GenPreloadList, "GenFListIndex": GenFListIndex, "CapLowercase": CapLowercase,
-				"HasSuffix": HasSuffix, "IsType": IsType}).
+				"HasSuffix": HasSuffix, "IsType": IsType, "JsonStr": JsonStr},
+			).
 			Parse(genfunc.GetGenLogicTemp())
 		if err != nil {
 			panic(err)

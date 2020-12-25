@@ -62,6 +62,10 @@ func IsType(src, typ string) bool {
 	return src == typ
 }
 
+func JsonStr(src string) string {
+	return "`json:" + `"` + src + ",omitempty" + `"` + "`"
+}
+
 // getTypeName Type acquisition filtering.类型获取过滤
 func getTypeName(name string, isNull bool) string {
 	// Precise matching first.先精确匹配

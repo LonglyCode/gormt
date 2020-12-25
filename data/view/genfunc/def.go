@@ -52,12 +52,6 @@ func (f optionFunc) apply(o *options) {
 	`
 
 	genlogic = `
-	package model
-	import (
-		"context"
-		"Carp/pkg/errors"
-		"gorm.io/gorm"
-	)
 
 	{{$obj := .}}{{$list := $obj.Em}}
 type {{$obj.StructName}}Mgr struct {
@@ -146,12 +140,35 @@ func (obj *{{$obj.StructName}}Mgr) WithSelect(strings ...string) GormOptionFunc 
 }
 
 type {{$obj.StructName}}ReqParams struct {
-	Query    *{{$obj.StructName}}Params 
-	Export   bool          
-	Fields   []string      
-	PageNum  int           
-	PageSize int           
+	Query    *{{$obj.StructName}}Params {{JsonStr "query"}}
+	Export   bool        {{JsonStr "export"}}
+	Fields   []string    {{JsonStr "fields"}}
+	PageNum  int         {{JsonStr "page_num"}} 
+	PageSize int         {{JsonStr "page_size"}}           
 }
+
+type {{$obj.StructName}}Params struct {
+	{{range $oem := $obj.Em}}
+		{{$t := HasSuffix $oem.ColStructName "Time"}}
+		{{$id := HasSuffix $oem.ColStructName "ID"}}
+		{{$str := IsType $oem.Type "string"}}
+
+		{{$oem.ColStructName}} {{$oem.Type}} {{JsonStr $oem.ColName}} 	
+
+		{{if $str}}
+		{{$oem.ColStructName}}Like {{$oem.Type}} {{JsonStr (print $oem.ColName "|like")}} 	
+		{{end}}
+
+		{{if $t}} 
+		{{$oem.ColStructName}}Interval []interface{} {{JsonStr (print $oem.ColName "|interval")}} 	
+		{{end}}
+
+		{{if $id}} 
+		{{$oem.ColStructName}}In []{{$oem.Type}} {{JsonStr (print $oem.ColName "|in")}} 	
+		{{end}}
+	{{end}}
+}
+
 
 //////////////////////////option case ////////////////////////////////////////////
 {{range $oem := $obj.Em}}
@@ -204,7 +221,7 @@ func {{$obj.StructName}}Filter(para *{{$obj.StructName}}ReqParams) GormOptionFun
 				db = db.Limit(para.PageSize).Offset((para.PageNum - 1) * para.PageSize)
 			}
 			if para.Query != nil {
-				{{range $oem := $obj.Em}}
+			{{range $oem := $obj.Em}}
 				{{$t := HasSuffix $oem.ColStructName "Time"}}
 				{{$id := HasSuffix $oem.ColStructName "ID"}}
 				{{$str := IsType $oem.Type "string"}}
