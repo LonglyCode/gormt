@@ -16,71 +16,23 @@ var {{.StructName}}Columns = struct { {{range $em := .Em}}
 	}
 `
 	genBase = `
-package {{.PackageName}}
+package model
 import (
-	"context"
-	"time"
-
 	"gorm.io/gorm"
 )
 
 var globalIsRelated bool = true  // 全局预加载
 
+type GormOptionFunc func(*gorm.DB) *gorm.DB
+
 // prepare for other
 type _BaseMgr struct {
 	*gorm.DB
-	ctx       context.Context
-	cancel    context.CancelFunc
-	timeout   time.Duration
-	isRelated bool
-}
-
-// SetCtx set context
-func (obj *_BaseMgr) SetTimeOut(timeout time.Duration) {
-	obj.ctx, obj.cancel = context.WithTimeout(context.Background(), timeout)
-	obj.timeout = timeout
-}
-
-// SetCtx set context
-func (obj *_BaseMgr) SetCtx(c context.Context) {
-	if c != nil {
-		obj.ctx = c
-	}
-}
-
-// Ctx get context
-func (obj *_BaseMgr) GetCtx() context.Context {
-	return obj.ctx
-}
-
-// Cancel cancel context
-func (obj *_BaseMgr) Cancel(c context.Context) {
-	obj.cancel()
 }
 
 // GetDB get gorm.DB info
 func (obj *_BaseMgr) GetDB() *gorm.DB {
 	return obj.DB
-}
-
-// UpdateDB update gorm.DB info
-func (obj *_BaseMgr) UpdateDB(db *gorm.DB) {
-	obj.DB = db
-}
-
-// GetIsRelated Query foreign key Association.获取是否查询外键关联(gorm.Related)
-func (obj *_BaseMgr) GetIsRelated() bool {
-	return obj.isRelated
-}
-
-// SetIsRelated Query foreign key Association.设置是否查询外键关联(gorm.Related)
-func (obj *_BaseMgr) SetIsRelated(b bool) {
-	obj.isRelated = b
-}
-
-// New new gorm.新gorm
-func (obj *_BaseMgr) New() *gorm.DB {
-	return obj.DB.Session(&gorm.Session{ Context: obj.ctx})
 }
 
 type options struct {
@@ -97,155 +49,200 @@ type optionFunc func(*options)
 func (f optionFunc) apply(o *options) {
 	f(o)
 }
-
-
-// OpenRelated 打开全局预加载
-func OpenRelated() {
-	globalIsRelated = true
-}
-
-// CloseRelated 关闭全局预加载
-func CloseRelated() {
-	globalIsRelated = true
-}
-
 	`
 
-	genlogic = `{{$obj := .}}{{$list := $obj.Em}}
-type _{{$obj.StructName}}Mgr struct {
-	*_BaseMgr
+	genlogic = `
+	package model
+	import (
+		"context"
+		"Carp/pkg/errors"
+		"gorm.io/gorm"
+	)
+
+	{{$obj := .}}{{$list := $obj.Em}}
+type {{$obj.StructName}}Mgr struct {
+	DB *gorm.DB
 }
 
-// {{$obj.StructName}}Mgr open func
-func {{$obj.StructName}}Mgr(db *gorm.DB) *_{{$obj.StructName}}Mgr {
-	if db == nil {
-		panic(fmt.Errorf("{{$obj.StructName}}Mgr need init by db"))
-	}
-	ctx, cancel := context.WithCancel(context.Background())
-	return &_{{$obj.StructName}}Mgr{_BaseMgr: &_BaseMgr{DB: db.Table("{{$obj.TableName}}"), isRelated: globalIsRelated,ctx:ctx,cancel:cancel,timeout:-1}}
-}
+var{{$obj.StructName}}Set = wire.NewSet(wire.Struct(new({{$obj.StructName}}Mgr), "*"))
 
 // GetTableName get sql table name.获取数据库名字
-func (obj *_{{$obj.StructName}}Mgr) GetTableName() string {
+func (obj *{{$obj.StructName}}Mgr) TableName() string {
 	return "{{$obj.TableName}}"
 }
 
-// Get 获取
-func (obj *_{{$obj.StructName}}Mgr) Get() (result {{$obj.StructName}}, err error) {
-	err = obj.DB.WithContext(obj.ctx).Table(obj.GetTableName()).Find(&result).Error
-	{{GenPreloadList $obj.PreloadList false}}
-	return
+func (obj *{{$obj.StructName}}Mgr) PreTableName(s string) string {
+	return fmt.Sprintf("%s.%s", obj.TableName(), s)
 }
 
-// Gets 获取批量结果
-func (obj *_{{$obj.StructName}}Mgr) Gets() (results []*{{$obj.StructName}}, err error) {
-	err = obj.DB.WithContext(obj.ctx).Table(obj.GetTableName()).Find(&results).Error
-	{{GenPreloadList $obj.PreloadList true}}
-	return
+// Get 获取
+func (obj *{{$obj.StructName}}Mgr) Get(ID int64) ({{$obj.StructName}}, error) {
+	result := &{{$obj.StructName}}{}	
+	err := obj.DB.Where("id = ?", ID).First(&result).Error
+	return result, err
+}
+
+// create 创建
+func (obj *{{$obj.StructName}}Mgr) Create(input *{{$obj.StructName}}) (*{{$obj.StructName}}, error) {
+	if err := obj.DB.Create(input).Error; err != nil {
+		return nil, err
+	}
+	return input, nil
+}
+
+// Updates 更新
+func (obj *{{$obj.StructName}}Mgr) Updates(id int64, column string, value interface{}) error {
+	if id == 0 {
+		return errors.ErrIdCanNotNull
+	}
+	m := &{{$obj.StructName}}{ID: id}
+	return obj.DB.Model(m).Update(column, value).Error
+}
+
+// QueryDefault 查询列表 
+func (obj *{{$obj.StructName}}Mgr) QueryDefault(ctx context.Context, opts ...GormOptionFunc) ([]*{{$obj.StructName}}, int64, error) {
+	var (
+		list []*{{$obj.StructName}}
+		cnt  int64
+	)
+	Q := obj.query(obj.DB.WithContext(ctx), opts...)
+	Q.Offset(-1).Find(&list).Count(&cnt)
+	err := Q.Order("update_time desc").Find(&list).Error
+	return list, cnt, err
+}
+
+//QueryDefault 查询单个
+func (obj *{{$obj.StructName}}Mgr) QueryOne(ctx context.Context, opts ...GormOptionFunc) (*{{$obj.StructName}}, bool, error) {
+	one := &{{$obj.StructName}}{}
+	err := obj.query(obj.DB.WithContext(ctx), opts...).First(one).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, false, nil
+		} else {
+			return nil, false, err
+		}
+	}
+	return one, true, nil
+}
+
+func (obj *{{$obj.StructName}}Mgr) query(db *gorm.DB, opts ...GormOptionFunc) *gorm.DB {
+	for _, f := range opts {
+		db = f(db)
+	}
+	return db
+}
+
+func (obj *{{$obj.StructName}}Mgr) WithSelect(strings ...string) GormOptionFunc {
+	return func(db *gorm.DB) *gorm.DB {
+		if len(strings) > 0 {
+			var ss []string
+			for _, s := range strings {
+				ss = append(ss, obj.PreTableName(s))
+			}
+			db = db.Select(ss)
+		}
+		return db
+	}
+}
+
+type {{$obj.StructName}}ReqParams struct {
+	Query    *{{$obj.StructName}}Params 
+	Export   bool          
+	Fields   []string      
+	PageNum  int           
+	PageSize int           
 }
 
 //////////////////////////option case ////////////////////////////////////////////
 {{range $oem := $obj.Em}}
 // With{{$oem.ColStructName}} {{$oem.ColName}}获取 {{$oem.Notes}}
-func (obj *_{{$obj.StructName}}Mgr) With{{$oem.ColStructName}}({{CapLowercase $oem.ColStructName}} {{$oem.Type}}) Option {
-	return optionFunc(func(o *options) { o.query["{{$oem.ColName}}"] = {{CapLowercase $oem.ColStructName}} })
+func (obj *{{$obj.StructName}}Mgr) With{{$oem.ColStructName}}({{CapLowercase $oem.ColStructName}} {{$oem.Type}}) GormOptionFunc {
+	return func(db *gorm.DB) *gorm.DB {
+		db = db.Where(obj.PreTableName("{{$oem.ColName}} = ?"), {{CapLowercase $oem.ColStructName}})
+		return db
+	} 
+}
+{{$t := HasSuffix $oem.ColStructName "Time"}}
+{{$id := HasSuffix $oem.ColStructName "ID"}}
+{{$str := IsType $oem.Type "string"}}
+{{if $t}}
+// With{{$oem.ColStructName}}Interval {{$oem.ColName}}获取时间区间 {{$oem.Notes}}
+func (obj *{{$obj.StructName}}Mgr) With{{$oem.ColStructName}}Interval(interval []interface{}) GormOptionFunc {
+	return func(db *gorm.DB) *gorm.DB {
+		db = db.Where(obj.PreTableName("{{$oem.ColName}} between ? and ?"), interval[0], interval[1])
+		return db
+	}
+}
+{{else if $id}}
+// With{{$oem.ColStructName}}In {{$oem.ColName}}获取in {{$oem.Notes}}
+func (obj *{{$obj.StructName}}Mgr) With{{$oem.ColStructName}}In({{CapLowercase $oem.ColStructName}}s ...{{$oem.Type}}) GormOptionFunc {
+	return func(db *gorm.DB) *gorm.DB {
+		if len({{CapLowercase $oem.ColStructName}}s) > 0 {
+			db = db.Where(obj.PreTableName("{{$oem.ColName}} in (?)"), {{CapLowercase $oem.ColStructName}}s)
+		}
+		return db
+	} 
+}
+{{else if $str}}
+// With{{$oem.ColStructName}}Like {{$oem.ColName}}获取like {{$oem.Notes}}
+func (obj *{{$obj.StructName}}Mgr) With{{$oem.ColStructName}}Like({{CapLowercase $oem.ColStructName}} {{$oem.Type}}) GormOptionFunc {
+	return func(db *gorm.DB) *gorm.DB {
+		db = db.Where(obj.PreTableName("{{$oem.ColName}} like ?"), "%"+{{CapLowercase $oem.ColStructName}}+"%")
+		return db
+	}
 }
 {{end}}
-
-// GetByOption 功能选项模式获取
-func (obj *_{{$obj.StructName}}Mgr) GetByOption(opts ...Option) (result {{$obj.StructName}}, err error) {
-	options := options{
-		query: make(map[string]interface{}, len(opts)),
-	}
-	for _, o := range opts {
-		o.apply(&options)
-	}
-
-	err = obj.DB.WithContext(obj.ctx).Table(obj.GetTableName()).Where(options.query).Find(&result).Error
-	{{GenPreloadList $obj.PreloadList false}}
-	return
-}
-
-// GetByOptions 批量功能选项模式获取
-func (obj *_{{$obj.StructName}}Mgr) GetByOptions(opts ...Option) (results []*{{$obj.StructName}}, err error) {
-	options := options{
-		query: make(map[string]interface{}, len(opts)),
-	}
-	for _, o := range opts {
-		o.apply(&options)
-	}
-
-	err = obj.DB.WithContext(obj.ctx).Table(obj.GetTableName()).Where(options.query).Find(&results).Error
-	{{GenPreloadList $obj.PreloadList true}}
-	return
-}
-//////////////////////////enume case ////////////////////////////////////////////
-
-{{range $oem := $obj.Em}}
-// GetFrom{{$oem.ColStructName}} 通过{{$oem.ColName}}获取内容 {{$oem.Notes}} {{if $oem.IsMulti}}
-func (obj *_{{$obj.StructName}}Mgr) GetFrom{{$oem.ColStructName}}({{CapLowercase $oem.ColStructName}} {{$oem.Type}}) (results []*{{$obj.StructName}}, err error) {
-	err = obj.DB.WithContext(obj.ctx).Table(obj.GetTableName()).Where("{{$oem.ColName}} = ?", {{CapLowercase $oem.ColStructName}}).Find(&results).Error
-	{{GenPreloadList $obj.PreloadList true}}
-	return
-}
-{{else}}
-func (obj *_{{$obj.StructName}}Mgr)  GetFrom{{$oem.ColStructName}}({{CapLowercase $oem.ColStructName}} {{$oem.Type}}) (result {{$obj.StructName}}, err error) {
-	err = obj.DB.WithContext(obj.ctx).Table(obj.GetTableName()).Where("{{$oem.ColName}} = ?", {{CapLowercase $oem.ColStructName}}).Find(&result).Error
-	{{GenPreloadList $obj.PreloadList false}}
-	return
-}
 {{end}}
-// GetBatchFrom{{$oem.ColStructName}} 批量唯一主键查找 {{$oem.Notes}}
-func (obj *_{{$obj.StructName}}Mgr) GetBatchFrom{{$oem.ColStructName}}({{CapLowercase $oem.ColStructName}}s []{{$oem.Type}}) (results []*{{$obj.StructName}}, err error) {
-	err = obj.DB.WithContext(obj.ctx).Table(obj.GetTableName()).Where("{{$oem.ColName}} IN (?)", {{CapLowercase $oem.ColStructName}}s).Find(&results).Error
-	{{GenPreloadList $obj.PreloadList true}}
-	return
+
+func {{$obj.StructName}}Filter(para *{{$obj.StructName}}ReqParams) GormOptionFunc {
+
+	return func(db *gorm.DB) *gorm.DB {
+		opt := &{{$obj.StructName}}Mgr{DB: db}
+		if para != nil {
+			db = db.Scopes(opt.WithSelect(para.Fields...))
+			if para.PageNum > 0 && para.PageSize > 0 {
+				db = db.Limit(para.PageSize).Offset((para.PageNum - 1) * para.PageSize)
+			}
+			if para.Query != nil {
+				{{range $oem := $obj.Em}}
+				{{$t := HasSuffix $oem.ColStructName "Time"}}
+				{{$id := HasSuffix $oem.ColStructName "ID"}}
+				{{$str := IsType $oem.Type "string"}}
+
+				{{if $str}}
+				if para.Query.{{$oem.ColStructName}} != "" {
+					db = db.Scopes(opt.With{{$oem.ColStructName}}(para.Query.{{$oem.ColStructName}}))
+				} 
+				if para.Query.{{$oem.ColStructName}}Like != "" {
+					db = db.Scopes(opt.With{{$oem.ColStructName}}Like(para.Query.{{$oem.ColStructName}}Like))
+				} 
+				{{else}}
+				if para.Query.{{$oem.ColStructName}} != 0 {
+					db = db.Scopes(opt.With{{$oem.ColStructName}}(para.Query.{{$oem.ColStructName}}))
+				} 
+				{{end}}
+
+				{{if $t}} 
+				if len(para.Query.{{$oem.ColStructName}}Interval) > 0 {
+					db = db.Scopes(opt.With{{$oem.ColStructName}}Interval(para.Query.{{$oem.ColStructName}}Interval))
+				}
+				{{end}}
+
+				{{if $id}} 
+				if len(para.Query.{{$oem.ColStructName}}In) > 0 {
+					db = db.Scopes(opt.With{{$oem.ColStructName}}In(para.Query.{{$oem.ColStructName}}In))
+				}
+				{{end}}
+
+			{{end}}
+			}
+		}
+		return db
+	}
 }
- {{end}}
  //////////////////////////primary index case ////////////////////////////////////////////
- {{range $ofm := $obj.Primay}}
- // {{GenFListIndex $ofm 1}} primay or index 获取唯一内容
- func (obj *_{{$obj.StructName}}Mgr) {{GenFListIndex $ofm 1}}({{GenFListIndex $ofm 2}}) (result {{$obj.StructName}}, err error) {
-	err = obj.DB.WithContext(obj.ctx).Table(obj.GetTableName()).Where("{{GenFListIndex $ofm 3}}", {{GenFListIndex $ofm 4}}).Find(&result).Error
-	{{GenPreloadList $obj.PreloadList false}}
-	return
-}
- {{end}}
-
- {{range $ofm := $obj.Index}}
- // {{GenFListIndex $ofm 1}}  获取多个内容
- func (obj *_{{$obj.StructName}}Mgr) {{GenFListIndex $ofm 1}}({{GenFListIndex $ofm 2}}) (results []*{{$obj.StructName}}, err error) {
-	err = obj.DB.WithContext(obj.ctx).Table(obj.GetTableName()).Where("{{GenFListIndex $ofm 3}}", {{GenFListIndex $ofm 4}}).Find(&results).Error
-	{{GenPreloadList $obj.PreloadList true}}
-	return
-}
- {{end}}
-
 `
-	genPreload = `if err == nil && obj.isRelated { {{range $obj := .}}{{if $obj.IsMulti}}
-		if err = obj.New().Table("{{$obj.ForeignkeyTableName}}").Where("{{$obj.ForeignkeyCol}} = ?", result.{{$obj.ColStructName}}).Find(&result.{{$obj.ForeignkeyStructName}}List).Error;err != nil { // {{$obj.Notes}}
-				if err != gorm.ErrRecordNotFound { // 非 没找到
-					return
-				}	
-			} {{else}} 
-		if err = obj.New().Table("{{$obj.ForeignkeyTableName}}").Where("{{$obj.ForeignkeyCol}} = ?", result.{{$obj.ColStructName}}).Find(&result.{{$obj.ForeignkeyStructName}}).Error; err != nil { // {{$obj.Notes}} 
-				if err != gorm.ErrRecordNotFound { // 非 没找到
-					return
-				}
-			}{{end}} {{end}}}
-`
-	genPreloadMulti = `if err == nil && obj.isRelated {
-		for i := 0; i < len(results); i++ { {{range $obj := .}}{{if $obj.IsMulti}}
-		if err = obj.New().Table("{{$obj.ForeignkeyTableName}}").Where("{{$obj.ForeignkeyCol}} = ?", results[i].{{$obj.ColStructName}}).Find(&results[i].{{$obj.ForeignkeyStructName}}List).Error;err != nil { // {{$obj.Notes}}
-				if err != gorm.ErrRecordNotFound { // 非 没找到
-					return
-				}
-			} {{else}} 
-		if err = obj.New().Table("{{$obj.ForeignkeyTableName}}").Where("{{$obj.ForeignkeyCol}} = ?", results[i].{{$obj.ColStructName}}).Find(&results[i].{{$obj.ForeignkeyStructName}}).Error; err != nil { // {{$obj.Notes}} 
-				if err != gorm.ErrRecordNotFound { // 非 没找到
-					return
-				}
-			} {{end}} {{end}}
-	}
-}`
+
+	genPreload      = ``
+	genPreloadMulti = ``
 )

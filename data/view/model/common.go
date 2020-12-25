@@ -54,6 +54,14 @@ func FilterKeywords(src string) string {
 	return src
 }
 
+func HasSuffix(src, su string) bool {
+	return strings.HasSuffix(src, su)
+}
+
+func IsType(src, typ string) bool {
+	return src == typ
+}
+
 // getTypeName Type acquisition filtering.类型获取过滤
 func getTypeName(name string, isNull bool) string {
 	// Precise matching first.先精确匹配

@@ -91,9 +91,9 @@ func (m *_Model) genTableElement(cols []ColumnsInfo) (el []genstruct.GenElement)
 				case ColumnsKeyUnique: // unique key.唯一索引
 					tmp.AddTag(_tagGorm, "unique")
 				case ColumnsKeyIndex: // index key.复合索引
-					if v1.KeyType=="FULLTEXT" {
+					if v1.KeyType == "FULLTEXT" {
 						tmp.AddTag(_tagGorm, getUninStr("index", ":", v1.KeyName)+",class:FULLTEXT")
-					}else{
+					} else {
 						tmp.AddTag(_tagGorm, getUninStr("index", ":", v1.KeyName))
 					}
 				case ColumnsKeyUniqueIndex: // unique index key.唯一复合索引
@@ -319,7 +319,9 @@ func (m *_Model) generateFunc() (genOut []GenOutInfo) {
 		data.Primay = append(data.Primay, uniqueIndex...)
 		data.Index = append(data.Index, index...)
 		tmpl, err := template.New("gen_logic").
-			Funcs(template.FuncMap{"GenPreloadList": GenPreloadList, "GenFListIndex": GenFListIndex, "CapLowercase": CapLowercase}).
+			Funcs(template.FuncMap{
+				"GenPreloadList": GenPreloadList, "GenFListIndex": GenFListIndex, "CapLowercase": CapLowercase,
+				"HasSuffix": HasSuffix, "IsType": IsType}).
 			Parse(genfunc.GetGenLogicTemp())
 		if err != nil {
 			panic(err)
