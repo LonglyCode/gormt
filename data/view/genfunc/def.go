@@ -58,7 +58,7 @@ type {{$obj.StructName}}Mgr struct {
 	DB *gorm.DB
 }
 
-var{{$obj.StructName}}Set = wire.NewSet(wire.Struct(new({{$obj.StructName}}Mgr), "*"))
+var {{$obj.StructName}}Set = wire.NewSet(wire.Struct(new({{$obj.StructName}}Mgr), "*"))
 
 // GetTableName get sql table name.获取数据库名字
 func (obj *{{$obj.StructName}}Mgr) TableName() string {
@@ -87,7 +87,7 @@ func (obj *{{$obj.StructName}}Mgr) Create(input *{{$obj.StructName}}) (*{{$obj.S
 // Updates 更新
 func (obj *{{$obj.StructName}}Mgr) Updates(id int64, column string, value interface{}) error {
 	if id == 0 {
-		return errors.ErrIdCanNotNull
+		return errors.New("id不能为空")
 	}
 	m := &{{$obj.StructName}}{ID: id}
 	return obj.DB.Model(m).Update(column, value).Error
@@ -211,10 +211,8 @@ func (obj *{{$obj.StructName}}Mgr) With{{$oem.ColStructName}}Like({{CapLowercase
 {{end}}
 {{end}}
 
-func {{$obj.StructName}}Filter(para *{{$obj.StructName}}ReqParams) GormOptionFunc {
-
+func (opt *{{$obj.StructName}}Mgr) Filter(para *{{$obj.StructName}}ReqParams) GormOptionFunc {
 	return func(db *gorm.DB) *gorm.DB {
-		opt := &{{$obj.StructName}}Mgr{DB: db}
 		if para != nil {
 			db = db.Scopes(opt.WithSelect(para.Fields...))
 			if para.PageNum > 0 && para.PageSize > 0 {
@@ -225,7 +223,6 @@ func {{$obj.StructName}}Filter(para *{{$obj.StructName}}ReqParams) GormOptionFun
 				{{$t := HasSuffix $oem.ColStructName "Time"}}
 				{{$id := HasSuffix $oem.ColStructName "ID"}}
 				{{$str := IsType $oem.Type "string"}}
-
 				{{if $str}}
 				if para.Query.{{$oem.ColStructName}} != "" {
 					db = db.Scopes(opt.With{{$oem.ColStructName}}(para.Query.{{$oem.ColStructName}}))
@@ -238,13 +235,11 @@ func {{$obj.StructName}}Filter(para *{{$obj.StructName}}ReqParams) GormOptionFun
 					db = db.Scopes(opt.With{{$oem.ColStructName}}(para.Query.{{$oem.ColStructName}}))
 				} 
 				{{end}}
-
 				{{if $t}} 
 				if len(para.Query.{{$oem.ColStructName}}Interval) > 0 {
 					db = db.Scopes(opt.With{{$oem.ColStructName}}Interval(para.Query.{{$oem.ColStructName}}Interval))
 				}
 				{{end}}
-
 				{{if $id}} 
 				if len(para.Query.{{$oem.ColStructName}}In) > 0 {
 					db = db.Scopes(opt.With{{$oem.ColStructName}}In(para.Query.{{$oem.ColStructName}}In))

@@ -122,6 +122,7 @@ func (m *_Model) genTableElement(cols []ColumnsInfo) (el []genstruct.GenElement)
 					tmp.AddTag(_tagJSON, "-")
 				} else {
 					tmp.AddTag(_tagJSON, mybigcamel.UnMarshal(v.Name))
+					tmp.AddTag("zh-cn", v.Notes)
 				}
 			}
 
