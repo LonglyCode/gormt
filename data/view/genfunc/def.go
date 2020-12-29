@@ -52,19 +52,13 @@ func (f optionFunc) apply(o *options) {
 	`
 
 	genlogic = `
-	package model
-	import (
-		"context"
-		"Carp/pkg/errors"
-		"gorm.io/gorm"
-	)
 
 	{{$obj := .}}{{$list := $obj.Em}}
 type {{$obj.StructName}}Mgr struct {
 	DB *gorm.DB
 }
 
-var{{$obj.StructName}}Set = wire.NewSet(wire.Struct(new({{$obj.StructName}}Mgr), "*"))
+var {{$obj.StructName}}Set = wire.NewSet(wire.Struct(new({{$obj.StructName}}Mgr), "*"))
 
 // GetTableName get sql table name.获取数据库名字
 func (obj *{{$obj.StructName}}Mgr) TableName() string {
@@ -97,6 +91,10 @@ func (obj *{{$obj.StructName}}Mgr) Updates(id int64, column string, value interf
 	}
 	m := &{{$obj.StructName}}{ID: id}
 	return obj.DB.Model(m).Update(column, value).Error
+}
+
+func (obj *{{$obj.StructName}}Mgr) Save(input *{{$obj.StructName}}) error {
+	return dbobj.DB().Model(obj).Updates(*input).Error
 }
 
 // QueryDefault 查询列表 
