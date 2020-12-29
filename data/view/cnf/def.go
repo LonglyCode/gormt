@@ -21,10 +21,10 @@ var TypeMysqlDicMp = map[string]string{
 	"date":                "time.Time",
 	"datetime":            "time.Time",
 	"bit(1)":              "[]uint8",
-	"tinyint":             "int8",
-	"tinyint unsigned":    "uint8",
-	"tinyint(1)":          "bool", // tinyint(1) 默认设置成bool
-	"tinyint(1) unsigned": "bool", // tinyint(1) 默认设置成bool
+	"tinyint":             "int64",
+	"tinyint unsigned":    "int64",
+	"tinyint(1)":          "int64",
+	"tinyint(1) unsigned": "int64",
 	"json":                "string",
 	"text":                "string",
 	"timestamp":           "time.Time",

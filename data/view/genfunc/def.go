@@ -94,7 +94,7 @@ func (obj *{{$obj.StructName}}Mgr) Updates(id int64, column string, value interf
 }
 
 func (obj *{{$obj.StructName}}Mgr) Save(input *{{$obj.StructName}}) error {
-	return dbobj.DB().Model(obj).Updates(*input).Error
+	return obj.DB.Model(obj).Updates(*input).Error
 }
 
 // QueryDefault 查询列表 
@@ -246,7 +246,7 @@ func (opt *{{$obj.StructName}}Mgr) Filter(para *{{$obj.StructName}}ReqParams) Go
 				{{end}}
 				{{if $id}} 
 				if len(para.Query.{{$oem.ColStructName}}In) > 0 {
-					db = db.Scopes(opt.With{{$oem.ColStructName}}In(para.Query.{{$oem.ColStructName}}In))
+					db = db.Scopes(opt.With{{$oem.ColStructName}}In(para.Query.{{$oem.ColStructName}}In...))
 				}
 				{{end}}
 
