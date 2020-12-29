@@ -87,7 +87,7 @@ func (obj *{{$obj.StructName}}Mgr) Create(input *{{$obj.StructName}}) (*{{$obj.S
 // Updates 更新
 func (obj *{{$obj.StructName}}Mgr) Updates(id int64, column string, value interface{}) error {
 	if id == 0 {
-		return errors.ErrIdCanNotNull
+		return errors.New("id不能为空")
 	}
 	m := &{{$obj.StructName}}{ID: id}
 	return obj.DB.Model(m).Update(column, value).Error
@@ -144,12 +144,35 @@ func (obj *{{$obj.StructName}}Mgr) WithSelect(strings ...string) GormOptionFunc 
 }
 
 type {{$obj.StructName}}ReqParams struct {
-	Query    *{{$obj.StructName}}Params 
-	Export   bool          
-	Fields   []string      
-	PageNum  int           
-	PageSize int           
+	Query    *{{$obj.StructName}}Params {{JsonStr "query"}}
+	Export   bool        {{JsonStr "export"}}
+	Fields   []string    {{JsonStr "fields"}}
+	PageNum  int         {{JsonStr "page_num"}} 
+	PageSize int         {{JsonStr "page_size"}}           
 }
+
+type {{$obj.StructName}}Params struct {
+	{{range $oem := $obj.Em}}
+		{{$t := HasSuffix $oem.ColStructName "Time"}}
+		{{$id := HasSuffix $oem.ColStructName "ID"}}
+		{{$str := IsType $oem.Type "string"}}
+
+		{{$oem.ColStructName}} {{$oem.Type}} {{JsonStr $oem.ColName}} 	
+
+		{{if $str}}
+		{{$oem.ColStructName}}Like {{$oem.Type}} {{JsonStr (print $oem.ColName "|like")}} 	
+		{{end}}
+
+		{{if $t}} 
+		{{$oem.ColStructName}}Interval []interface{} {{JsonStr (print $oem.ColName "|interval")}} 	
+		{{end}}
+
+		{{if $id}} 
+		{{$oem.ColStructName}}In []{{$oem.Type}} {{JsonStr (print $oem.ColName "|in")}} 	
+		{{end}}
+	{{end}}
+}
+
 
 //////////////////////////option case ////////////////////////////////////////////
 {{range $oem := $obj.Em}}
@@ -192,21 +215,18 @@ func (obj *{{$obj.StructName}}Mgr) With{{$oem.ColStructName}}Like({{CapLowercase
 {{end}}
 {{end}}
 
-func {{$obj.StructName}}Filter(para *{{$obj.StructName}}ReqParams) GormOptionFunc {
-
+func (opt *{{$obj.StructName}}Mgr) Filter(para *{{$obj.StructName}}ReqParams) GormOptionFunc {
 	return func(db *gorm.DB) *gorm.DB {
-		opt := &{{$obj.StructName}}Mgr{DB: db}
 		if para != nil {
 			db = db.Scopes(opt.WithSelect(para.Fields...))
 			if para.PageNum > 0 && para.PageSize > 0 {
 				db = db.Limit(para.PageSize).Offset((para.PageNum - 1) * para.PageSize)
 			}
 			if para.Query != nil {
-				{{range $oem := $obj.Em}}
+			{{range $oem := $obj.Em}}
 				{{$t := HasSuffix $oem.ColStructName "Time"}}
 				{{$id := HasSuffix $oem.ColStructName "ID"}}
 				{{$str := IsType $oem.Type "string"}}
-
 				{{if $str}}
 				if para.Query.{{$oem.ColStructName}} != "" {
 					db = db.Scopes(opt.With{{$oem.ColStructName}}(para.Query.{{$oem.ColStructName}}))
@@ -219,13 +239,11 @@ func {{$obj.StructName}}Filter(para *{{$obj.StructName}}ReqParams) GormOptionFun
 					db = db.Scopes(opt.With{{$oem.ColStructName}}(para.Query.{{$oem.ColStructName}}))
 				} 
 				{{end}}
-
 				{{if $t}} 
 				if len(para.Query.{{$oem.ColStructName}}Interval) > 0 {
 					db = db.Scopes(opt.With{{$oem.ColStructName}}Interval(para.Query.{{$oem.ColStructName}}Interval))
 				}
 				{{end}}
-
 				{{if $id}} 
 				if len(para.Query.{{$oem.ColStructName}}In) > 0 {
 					db = db.Scopes(opt.With{{$oem.ColStructName}}In(para.Query.{{$oem.ColStructName}}In))
