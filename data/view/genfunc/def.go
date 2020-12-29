@@ -70,7 +70,7 @@ func (obj *{{$obj.StructName}}Mgr) PreTableName(s string) string {
 }
 
 // Get 获取
-func (obj *{{$obj.StructName}}Mgr) Get(ID int64) ({{$obj.StructName}}, error) {
+func (obj *{{$obj.StructName}}Mgr) Get(ID int64) (*{{$obj.StructName}}, error) {
 	result := &{{$obj.StructName}}{}	
 	err := obj.DB.Where("id = ?", ID).First(&result).Error
 	return result, err
