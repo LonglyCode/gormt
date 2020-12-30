@@ -94,7 +94,7 @@ func (obj *{{$obj.StructName}}Mgr) Updates(id int64, column string, value interf
 }
 
 func (obj *{{$obj.StructName}}Mgr) Save(input *{{$obj.StructName}}) error {
-	return obj.DB.Model(obj).Updates(*input).Error
+	return obj.DB.Model(input).Updates(*input).Error
 }
 
 // QueryDefault 查询列表 
@@ -103,8 +103,11 @@ func (obj *{{$obj.StructName}}Mgr) QueryDefault(ctx context.Context, opts ...Gor
 		list []*{{$obj.StructName}}
 		cnt  int64
 	)
+	// for count
 	Q := obj.query(obj.DB.WithContext(ctx), opts...)
 	Q.Offset(-1).Find(&list).Count(&cnt)
+	// fore list
+	Q = obj.query(obj.DB.WithContext(ctx), opts...)
 	err := Q.Order("update_time desc").Find(&list).Error
 	return list, cnt, err
 }
