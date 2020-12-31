@@ -66,6 +66,11 @@ func JsonStr(src string) string {
 	return "`json:" + `"` + src + ",omitempty" + `"` + "`"
 }
 
+func IsPrimary(info FList) bool {
+	fmt.Printf("key %d, key name %s\n", info.Key, info.KeyName)
+	return info.Key == ColumnsKeyPrimary
+}
+
 // getTypeName Type acquisition filtering.类型获取过滤
 func getTypeName(name string, isNull bool) string {
 	// Precise matching first.先精确匹配

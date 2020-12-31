@@ -69,12 +69,27 @@ func (obj *{{$obj.StructName}}Mgr) PreTableName(s string) string {
 	return fmt.Sprintf("%s.%s", obj.TableName(), s)
 }
 
-// Get 获取
-func (obj *{{$obj.StructName}}Mgr) Get(ID int64) (*{{$obj.StructName}}, error) {
-	result := &{{$obj.StructName}}{}	
-	err := obj.DB.Where("id = ?", ID).First(&result).Error
-	return result, err
+ {{range $ofm := $obj.Index}}
+{{$primary := IsPrimary $ofm}}
+{{if $primary}}
+	// Get 获取
+	func (obj *{{$obj.StructName}}Mgr) Get({{GenFListIndex $ofm 2}}) (*{{$obj.StructName}}, error) {
+		result := &{{$obj.StructName}}{}	
+		err := obj.DB.Where("{{GenFListIndex $ofm 3}}", {{GenFListIndex $ofm 4}}).First(&result).Error
+		return result, err
+	}
+	// Updates 更新
+	func (obj *{{$obj.StructName}}Mgr) Updates({{GenFListIndex $ofm 2}}, column string, value interface{}) error {
+	if {{GenFListIndex $ofm 3}} == 0 {
+		return errors.New("id不能为空")
+	}
+	m := &{{$obj.StructName}}{
+		{{GenFListIndex $ofm 4}}: {{GenFListIndex $ofm 4}},
+	}
+	return obj.DB.Model(m).Update(column, value).Error
 }
+{{end}}
+{{end}}
 
 // create 创建
 func (obj *{{$obj.StructName}}Mgr) Create(input *{{$obj.StructName}}) (*{{$obj.StructName}}, error) {
@@ -84,14 +99,6 @@ func (obj *{{$obj.StructName}}Mgr) Create(input *{{$obj.StructName}}) (*{{$obj.S
 	return input, nil
 }
 
-// Updates 更新
-func (obj *{{$obj.StructName}}Mgr) Updates(id int64, column string, value interface{}) error {
-	if id == 0 {
-		return errors.New("id不能为空")
-	}
-	m := &{{$obj.StructName}}{ID: id}
-	return obj.DB.Model(m).Update(column, value).Error
-}
 
 func (obj *{{$obj.StructName}}Mgr) Save(input *{{$obj.StructName}}) error {
 	return obj.DB.Model(input).Updates(*input).Error

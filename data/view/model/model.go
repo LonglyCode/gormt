@@ -75,7 +75,7 @@ func (m *_Model) genTableElement(cols []ColumnsInfo) (el []genstruct.GenElement)
 
 	for _, v := range cols {
 		var tmp genstruct.GenElement
-		var isPK bool
+		// var isPK bool
 		if strings.EqualFold(v.Type, "gorm.Model") { // gorm model
 			tmp.SetType(v.Type) //
 		} else {
@@ -87,7 +87,7 @@ func (m *_Model) genTableElement(cols []ColumnsInfo) (el []genstruct.GenElement)
 				// case ColumnsKeyDefault:
 				case ColumnsKeyPrimary: // primary key.主键
 					tmp.AddTag(_tagGorm, "primaryKey")
-					isPK = true
+					// isPK = true
 				case ColumnsKeyUnique: // unique key.唯一索引
 					tmp.AddTag(_tagGorm, "unique")
 				case ColumnsKeyIndex: // index key.复合索引
@@ -118,7 +118,7 @@ func (m *_Model) genTableElement(cols []ColumnsInfo) (el []genstruct.GenElement)
 
 			// json tag
 			if config.GetIsWEBTag() {
-				if isPK && config.GetIsWebTagPkHidden() {
+				if config.GetIsWebTagPkHidden() {
 					tmp.AddTag(_tagJSON, "-")
 				} else {
 					tmp.AddTag(_tagJSON, mybigcamel.UnMarshal(v.Name))
@@ -322,7 +322,7 @@ func (m *_Model) generateFunc() (genOut []GenOutInfo) {
 		tmpl, err := template.New("gen_logic").
 			Funcs(template.FuncMap{
 				"GenPreloadList": GenPreloadList, "GenFListIndex": GenFListIndex, "CapLowercase": CapLowercase,
-				"HasSuffix": HasSuffix, "IsType": IsType, "JsonStr": JsonStr},
+				"HasSuffix": HasSuffix, "IsType": IsType, "JsonStr": JsonStr, "IsPrimary": IsPrimary},
 			).
 			Parse(genfunc.GetGenLogicTemp())
 		if err != nil {
