@@ -43,12 +43,12 @@ func (obj *_BaseMgr) Cancel(c context.Context) {
 
 // GetDB get gorm.DB info
 func (obj *_BaseMgr) GetDB() *gorm.DB {
-	return obj.DB
+	return Session(obj.DB, ctx)
 }
 
 // UpdateDB update gorm.DB info
 func (obj *_BaseMgr) UpdateDB(db *gorm.DB) {
-	obj.DB = db
+	Session(obj.DB, ctx) = db
 }
 
 // GetIsRelated Query foreign key Association.获取是否查询外键关联(gorm.Related)
@@ -63,7 +63,7 @@ func (obj *_BaseMgr) SetIsRelated(b bool) {
 
 // New new gorm.新gorm
 func (obj *_BaseMgr) New() *gorm.DB {
-	return obj.DB.Session(&gorm.Session{Context: obj.ctx})
+	return Session(obj.DB, ctx).Session(&gorm.Session{Context: obj.ctx})
 }
 
 type options struct {

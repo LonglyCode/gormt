@@ -33,7 +33,7 @@ type _BaseMgr struct {
 
 // GetDB get gorm.DB info
 func (obj *_BaseMgr) GetDB() *gorm.DB {
-	return obj.DB
+	return Session(obj.DB, ctx)
 }
 
 type options struct {
@@ -50,7 +50,19 @@ type optionFunc func(*options)
 func (f optionFunc) apply(o *options) {
 	f(o)
 }
-	`
+
+func Session(db *gorm.DB, ctx context.Context) *gorm.DB {
+	gormlog := glog.New(
+		logger.WithContext(ctx),
+		glog.Config{
+			SlowThreshold: time.Second, // 慢 SQL 阈值
+			LogLevel:      glog.Info,   // Log level
+			Colorful:      true,        // 彩色打印
+		},
+	)
+	return db.Session(&gorm.Session{Context: ctx, Logger: gormlog})
+}
+`
 
 	genlogic = `
 
@@ -74,23 +86,11 @@ func (obj *{{$obj.StructName}}Mgr) PreTableName(s string) string {
 	return b.String()
 }
 
-func (obj **{{$obj.StructName}}Mgr) GetDB(ctx context.Context) *gorm.DB {
-	gormlog := glog.New(
-		logger.WithContext(ctx),
-		glog.Config{
-			SlowThreshold: time.Second, // 慢 SQL 阈值
-			LogLevel:      glog.Info,   // Log level
-			Colorful:      true,        // 彩色打印
-		},
-	)
-	return obj.DB.Session(&gorm.Session{Context: ctx, Logger: gormlog})
-}
-
  {{range $ofm := $obj.Primay}}
 	// Get 获取
 	func (obj *{{$obj.StructName}}Mgr) Get(ctx context.Context,{{GenFListIndex $ofm 2}}) (*{{$obj.StructName}}, error) {
 		result := &{{$obj.StructName}}{}	
-		err := obj.DB.Where("{{GenFListIndex $ofm 3}}", {{GenFListIndex $ofm 4}}).First(&result).Error
+		err := Session(obj.DB, ctx).Where("{{GenFListIndex $ofm 3}}", {{GenFListIndex $ofm 4}}).First(&result).Error
 		return result, err
 	}
 	// Updates 更新
@@ -101,12 +101,12 @@ func (obj **{{$obj.StructName}}Mgr) GetDB(ctx context.Context) *gorm.DB {
 	m := &{{$obj.StructName}}{
 		{{GenFListIndex $ofm 5}}: {{GenFListIndex $ofm 4}},
 	}
-	return obj.DB.Model(m).Update(column, value).Error
+	return Session(obj.DB, ctx).Model(m).Update(column, value).Error
 	}
 
 	// Delete By ID
 	func (obj *{{$obj.StructName}}Mgr) Delete(ctx context.Context, {{GenFListIndex $ofm 2}}) error {
-		err := obj.DB.Delete(&{{$obj.StructName}}{}, {{GenFListIndex $ofm 4}}).Error
+		err := Session(obj.DB, ctx).Delete(&{{$obj.StructName}}{}, {{GenFListIndex $ofm 4}}).Error
 		return err
 	}
 {{end}}
@@ -114,7 +114,7 @@ func (obj **{{$obj.StructName}}Mgr) GetDB(ctx context.Context) *gorm.DB {
 
 // create 创建
 func (obj *{{$obj.StructName}}Mgr) Create(ctx context.Context, input *{{$obj.StructName}}) (*{{$obj.StructName}}, error) {
-	if err := obj.DB.Create(input).Error; err != nil {
+	if err := Session(obj.DB, ctx).Create(input).Error; err != nil {
 		return nil, err
 	}
 	return input, nil
@@ -122,7 +122,7 @@ func (obj *{{$obj.StructName}}Mgr) Create(ctx context.Context, input *{{$obj.Str
 
 
 func (obj *{{$obj.StructName}}Mgr) Save(ctx context.Context, input *{{$obj.StructName}}) error {
-	return obj.DB.Model(input).Updates(*input).Error
+	return Session(obj.DB, ctx).Model(input).Updates(*input).Error
 }
 
 // QueryDefault 查询列表 
@@ -132,10 +132,10 @@ func (obj *{{$obj.StructName}}Mgr) QueryDefault(ctx context.Context, opts ...Gor
 		cnt  int64
 	)
 	// for count
-	Q := obj.query(obj.DB.WithContext(ctx), opts...)
+	Q := obj.query(Session(obj.DB, ctx), opts...)
 	Q.Offset(-1).Find(&list).Count(&cnt)
 	// fore list
-	Q = obj.query(obj.DB.WithContext(ctx), opts...)
+	Q = obj.query(Session(obj.DB, ctx), opts...)
 	err := Q.Order("update_time desc").Find(&list).Error
 	return list, cnt, err
 }
@@ -143,7 +143,7 @@ func (obj *{{$obj.StructName}}Mgr) QueryDefault(ctx context.Context, opts ...Gor
 //QueryDefault 查询单个
 func (obj *{{$obj.StructName}}Mgr) QueryOne(ctx context.Context, opts ...GormOptionFunc) (*{{$obj.StructName}}, bool, error) {
 	one := &{{$obj.StructName}}{}
-	err := obj.query(obj.DB.WithContext(ctx), opts...).First(one).Error
+	err := obj.query(Session(obj.DB, ctx), opts...).First(one).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, false, nil
