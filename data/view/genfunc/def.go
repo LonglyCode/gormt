@@ -19,6 +19,7 @@ var {{.StructName}}Columns = struct { {{range $em := .Em}}
 package model
 import (
 	"gorm.io/gorm"
+	glog "gorm.io/gorm/logger"
 )
 
 var globalIsRelated bool = true  // 全局预加载
@@ -66,33 +67,53 @@ func (obj *{{$obj.StructName}}Mgr) TableName() string {
 }
 
 func (obj *{{$obj.StructName}}Mgr) PreTableName(s string) string {
-	return fmt.Sprintf("%s.%s", obj.TableName(), s)
+	b := strings.Builder{}
+	b.WriteString(obj.TableName())
+	b.WriteString(".")
+	b.WriteString(s)
+	return b.String()
 }
 
- {{range $ofm := $obj.Index}}
-{{$primary := IsPrimary $ofm}}
-{{if $primary}}
+func (obj **{{$obj.StructName}}Mgr) GetDB(ctx context.Context) *gorm.DB {
+	gormlog := glog.New(
+		logger.WithContext(ctx),
+		glog.Config{
+			SlowThreshold: time.Second, // 慢 SQL 阈值
+			LogLevel:      glog.Info,   // Log level
+			Colorful:      true,        // 彩色打印
+		},
+	)
+	return obj.DB.Session(&gorm.Session{Context: ctx, Logger: gormlog})
+}
+
+ {{range $ofm := $obj.Primay}}
 	// Get 获取
-	func (obj *{{$obj.StructName}}Mgr) Get({{GenFListIndex $ofm 2}}) (*{{$obj.StructName}}, error) {
+	func (obj *{{$obj.StructName}}Mgr) Get(ctx context.Context,{{GenFListIndex $ofm 2}}) (*{{$obj.StructName}}, error) {
 		result := &{{$obj.StructName}}{}	
 		err := obj.DB.Where("{{GenFListIndex $ofm 3}}", {{GenFListIndex $ofm 4}}).First(&result).Error
 		return result, err
 	}
 	// Updates 更新
-	func (obj *{{$obj.StructName}}Mgr) Updates({{GenFListIndex $ofm 2}}, column string, value interface{}) error {
-	if {{GenFListIndex $ofm 3}} == 0 {
+	func (obj *{{$obj.StructName}}Mgr) Updates(ctx context.Context,{{GenFListIndex $ofm 2}}, column string, value interface{}) error {
+	if {{GenFListIndex $ofm 4}} == 0 {
 		return errors.New("id不能为空")
 	}
 	m := &{{$obj.StructName}}{
-		{{GenFListIndex $ofm 4}}: {{GenFListIndex $ofm 4}},
+		{{GenFListIndex $ofm 5}}: {{GenFListIndex $ofm 4}},
 	}
 	return obj.DB.Model(m).Update(column, value).Error
-}
-{{end}}
+	}
+
+	// Delete By ID
+	func (obj *{{$obj.StructName}}Mgr) Delete(ctx context.Context, {{GenFListIndex $ofm 2}}) error {
+		err := obj.DB.Delete(&{{$obj.StructName}}{}, {{GenFListIndex $ofm 4}}).Error
+		return err
+	}
 {{end}}
 
+
 // create 创建
-func (obj *{{$obj.StructName}}Mgr) Create(input *{{$obj.StructName}}) (*{{$obj.StructName}}, error) {
+func (obj *{{$obj.StructName}}Mgr) Create(ctx context.Context, input *{{$obj.StructName}}) (*{{$obj.StructName}}, error) {
 	if err := obj.DB.Create(input).Error; err != nil {
 		return nil, err
 	}
@@ -100,7 +121,7 @@ func (obj *{{$obj.StructName}}Mgr) Create(input *{{$obj.StructName}}) (*{{$obj.S
 }
 
 
-func (obj *{{$obj.StructName}}Mgr) Save(input *{{$obj.StructName}}) error {
+func (obj *{{$obj.StructName}}Mgr) Save(ctx context.Context, input *{{$obj.StructName}}) error {
 	return obj.DB.Model(input).Updates(*input).Error
 }
 

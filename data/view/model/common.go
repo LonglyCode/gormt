@@ -218,6 +218,14 @@ func GenFListIndex(info FList, status int) string {
 			}
 			return strings.Join(strs, " , ")
 		}
+	case 5: // 5:值列表，非小写
+		{
+			var strs []string
+			for _, v := range info.Kem {
+				strs = append(strs, v.ColStructName)
+			}
+			return strings.Join(strs, " , ")
+		}
 	}
 
 	return ""
