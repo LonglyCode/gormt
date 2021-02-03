@@ -73,6 +73,20 @@ type {{$obj.StructName}}Mgr struct {
 
 var {{$obj.StructName}}Set = wire.NewSet(wire.Struct(new({{$obj.StructName}}Mgr), "*"))
 
+var {{$obj.StructName}}RepoSet = wire.NewSet(wire.Struct(new({{$obj.StructName}}Mgr), "*"), wire.Bind(new({{$obj.StructName}}Repo), new(*{{$obj.StructName}}Mgr)))
+
+// {{$obj.StructName}}Repo interface for proxy or...
+type {{$obj.StructName}}Repo interface {
+	Create(ctx context.Context, input *{{$obj.StructName}}) (*{{$obj.StructName}}, error)
+	Save(ctx context.Context, input *{{$obj.StructName}}) error 
+	 {{range $ofm := $obj.Primay}}
+	Updates(ctx context.Context,{{GenFListIndex $ofm 2}}, column string, value interface{}) error 
+	Delete(ctx context.Context, {{GenFListIndex $ofm 2}}) error 
+	{{end}}
+	QueryOne(ctx context.Context, opts ...GormOptionFunc) (*{{$obj.StructName}}, bool, error) 
+	QueryDefault(ctx context.Context, opts ...GormOptionFunc) ([]*{{$obj.StructName}}, int64, error) 
+}
+
 // GetTableName get sql table name.获取数据库名字
 func (obj *{{$obj.StructName}}Mgr) TableName() string {
 	return "{{$obj.TableName}}"
@@ -87,12 +101,6 @@ func (obj *{{$obj.StructName}}Mgr) PreTableName(s string) string {
 }
 
  {{range $ofm := $obj.Primay}}
-	// Get 获取
-	func (obj *{{$obj.StructName}}Mgr) Get(ctx context.Context,{{GenFListIndex $ofm 2}}) (*{{$obj.StructName}}, error) {
-		result := &{{$obj.StructName}}{}	
-		err := Session(obj.DB, ctx).Where("{{GenFListIndex $ofm 3}}", {{GenFListIndex $ofm 4}}).First(&result).Error
-		return result, err
-	}
 	// Updates 更新
 	func (obj *{{$obj.StructName}}Mgr) Updates(ctx context.Context,{{GenFListIndex $ofm 2}}, column string, value interface{}) error {
 	if {{GenFListIndex $ofm 4}} == 0 {
