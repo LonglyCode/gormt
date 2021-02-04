@@ -50,18 +50,6 @@ type optionFunc func(*options)
 func (f optionFunc) apply(o *options) {
 	f(o)
 }
-
-func Session(db *gorm.DB, ctx context.Context) *gorm.DB {
-	gormlog := glog.New(
-		logger.WithContext(ctx),
-		glog.Config{
-			SlowThreshold: time.Second, // 慢 SQL 阈值
-			LogLevel:      glog.Info,   // Log level
-			Colorful:      true,        // 彩色打印
-		},
-	)
-	return db.Session(&gorm.Session{Context: ctx, Logger: gormlog})
-}
 `
 
 	genlogic = `
@@ -78,9 +66,9 @@ var {{$obj.StructName}}RepoSet = wire.NewSet(wire.Struct(new({{$obj.StructName}}
 // {{$obj.StructName}}Repo interface for proxy or...
 type {{$obj.StructName}}Repo interface {
 	Create(ctx context.Context, input *{{$obj.StructName}}) (*{{$obj.StructName}}, error)
-	Save(ctx context.Context, input *{{$obj.StructName}}) error 
 	 {{range $ofm := $obj.Primay}}
-	Updates(ctx context.Context,{{GenFListIndex $ofm 2}}, column string, value interface{}) error 
+	Get(ctx context.Context,{{GenFListIndex $ofm 2}}) (*{{$obj.StructName}}, error) 
+	Updates(ctx context.Context,{{GenFListIndex $ofm 2}}, input *{{$obj.StructName}}) error 
 	Delete(ctx context.Context, {{GenFListIndex $ofm 2}}) error 
 	{{end}}
 	QueryOne(ctx context.Context, opts ...GormOptionFunc) (*{{$obj.StructName}}, bool, error) 
@@ -101,20 +89,26 @@ func (obj *{{$obj.StructName}}Mgr) PreTableName(s string) string {
 }
 
  {{range $ofm := $obj.Primay}}
+ 	 // Get 获取
+	func (obj *{{$obj.StructName}}Mgr) Get(ctx context.Context,{{GenFListIndex $ofm 2}}) (*{{$obj.StructName}}, error) {
+		result := &{{$obj.StructName}}{}	
+		err := obj.DB.WithContext(ctx).Where("{{GenFListIndex $ofm 3}}", {{GenFListIndex $ofm 4}}).First(&result).Error
+		return result, err
+	}
 	// Updates 更新
-	func (obj *{{$obj.StructName}}Mgr) Updates(ctx context.Context,{{GenFListIndex $ofm 2}}, column string, value interface{}) error {
+	func (obj *{{$obj.StructName}}Mgr) Updates(ctx context.Context,{{GenFListIndex $ofm 2}}, input *{{$obj.StructName}}) error {
 	if {{GenFListIndex $ofm 4}} == 0 {
 		return errors.New("id不能为空")
 	}
 	m := &{{$obj.StructName}}{
 		{{GenFListIndex $ofm 5}}: {{GenFListIndex $ofm 4}},
 	}
-	return Session(obj.DB, ctx).Model(m).Update(column, value).Error
+	return obj.DB.WithContext(ctx).Model(m).Updates(*input).Error
 	}
 
 	// Delete By ID
 	func (obj *{{$obj.StructName}}Mgr) Delete(ctx context.Context, {{GenFListIndex $ofm 2}}) error {
-		err := Session(obj.DB, ctx).Delete(&{{$obj.StructName}}{}, {{GenFListIndex $ofm 4}}).Error
+		err := obj.DB.WithContext(ctx).Delete(&{{$obj.StructName}}{}, {{GenFListIndex $ofm 4}}).Error
 		return err
 	}
 {{end}}
@@ -122,15 +116,10 @@ func (obj *{{$obj.StructName}}Mgr) PreTableName(s string) string {
 
 // create 创建
 func (obj *{{$obj.StructName}}Mgr) Create(ctx context.Context, input *{{$obj.StructName}}) (*{{$obj.StructName}}, error) {
-	if err := Session(obj.DB, ctx).Create(input).Error; err != nil {
+	if err := obj.DB.WithContext(ctx).Create(input).Error; err != nil {
 		return nil, err
 	}
 	return input, nil
-}
-
-
-func (obj *{{$obj.StructName}}Mgr) Save(ctx context.Context, input *{{$obj.StructName}}) error {
-	return Session(obj.DB, ctx).Model(input).Updates(*input).Error
 }
 
 // QueryDefault 查询列表 
@@ -140,26 +129,25 @@ func (obj *{{$obj.StructName}}Mgr) QueryDefault(ctx context.Context, opts ...Gor
 		cnt  int64
 	)
 	// for count
-	Q := obj.query(Session(obj.DB, ctx), opts...)
+	Q := obj.query(obj.DB.WithContext(ctx), opts...)
 	Q.Offset(-1).Find(&list).Count(&cnt)
 	// fore list
-	Q = obj.query(Session(obj.DB, ctx), opts...)
+	Q = obj.query(obj.DB.WithContext(ctx), opts...)
 	err := Q.Order("update_time desc").Find(&list).Error
 	return list, cnt, err
 }
 
-//QueryDefault 查询单个
+//QueryOne 查询单个
 func (obj *{{$obj.StructName}}Mgr) QueryOne(ctx context.Context, opts ...GormOptionFunc) (*{{$obj.StructName}}, bool, error) {
 	one := &{{$obj.StructName}}{}
-	err := obj.query(Session(obj.DB, ctx), opts...).First(one).Error
-	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, false, nil
-		} else {
-			return nil, false, err
-		}
+	err := obj.query(obj.DB.WithContext(ctx), opts...).First(one).Error
+	if err == nil {
+		return one, true, nil
+	} else if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, false, nil
+	} else {
+		return nil, false, err
 	}
-	return one, true, nil
 }
 
 func (obj *{{$obj.StructName}}Mgr) query(db *gorm.DB, opts ...GormOptionFunc) *gorm.DB {
