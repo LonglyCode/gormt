@@ -50,6 +50,39 @@ type optionFunc func(*options)
 func (f optionFunc) apply(o *options) {
 	f(o)
 }
+
+type scanObj struct{}
+
+// NewScanObj 创建返回
+func NewScanObj(ctx context.Context, o interface{}) context.Context {
+	return context.WithValue(ctx, scanObj{}, o)
+}
+
+// GetScanObjCtx 从上下文中获取跟踪ID
+func GetScanObjCtx(ctx context.Context) interface{} {
+	v := ctx.Value(scanObj{})
+	if v != nil {
+		return v
+	}
+	return nil
+}
+
+type cacheKey struct{}
+
+// NewcacheKey 创建返回
+func NewcacheKey(ctx context.Context, key string) context.Context {
+	return context.WithValue(ctx, cacheKey{}, key)
+}
+
+// GetCacheKeyCtx 从上下文中获取跟踪ID
+func GetCacheKeyCtx(ctx context.Context) string {
+	v := ctx.Value(cacheKey{})
+	if v != nil {
+		return v.(string)
+	}
+	return ""
+}
+
 `
 
 	genlogic = `
@@ -138,16 +171,13 @@ func (obj *{{$obj.StructName}}Mgr) QueryDefault(ctx context.Context, opts ...Gor
 }
 
 //QueryOne 查询单个
-func (obj *{{$obj.StructName}}Mgr) QueryOne(ctx context.Context, opts ...GormOptionFunc) (*{{$obj.StructName}}, bool, error) {
-	one := &{{$obj.StructName}}{}
-	err := obj.query(obj.DB.WithContext(ctx), opts...).First(one).Error
-	if err == nil {
-		return one, true, nil
-	} else if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, false, nil
-	} else {
-		return nil, false, err
+func (obj *{{$obj.StructName}}Mgr) QueryOne(ctx context.Context, opts ...GormOptionFunc) error {
+	value := GetScanObjCtx(ctx)
+	err := obj.query(obj.DB.WithContext(ctx), opts...).First(value).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return errors.ErrIdCanNotFound
 	}
+	return err
 }
 
 func (obj *{{$obj.StructName}}Mgr) query(db *gorm.DB, opts ...GormOptionFunc) *gorm.DB {
