@@ -66,23 +66,6 @@ func GetScanObjCtx(ctx context.Context) interface{} {
 	}
 	return nil
 }
-
-type cacheKey struct{}
-
-// NewcacheKey 创建返回
-func NewcacheKey(ctx context.Context, key string) context.Context {
-	return context.WithValue(ctx, cacheKey{}, key)
-}
-
-// GetCacheKeyCtx 从上下文中获取跟踪ID
-func GetCacheKeyCtx(ctx context.Context) string {
-	v := ctx.Value(cacheKey{})
-	if v != nil {
-		return v.(string)
-	}
-	return ""
-}
-
 `
 
 	genlogic = `
@@ -90,23 +73,10 @@ func GetCacheKeyCtx(ctx context.Context) string {
 	{{$obj := .}}{{$list := $obj.Em}}
 type {{$obj.StructName}}Mgr struct {
 	DB *gorm.DB
+	Cache *cache.Cache
 }
 
 var {{$obj.StructName}}Set = wire.NewSet(wire.Struct(new({{$obj.StructName}}Mgr), "*"))
-
-var {{$obj.StructName}}RepoSet = wire.NewSet(wire.Struct(new({{$obj.StructName}}Mgr), "*"), wire.Bind(new({{$obj.StructName}}Repo), new(*{{$obj.StructName}}Mgr)))
-
-// {{$obj.StructName}}Repo interface for proxy or...
-type {{$obj.StructName}}Repo interface {
-	Create(ctx context.Context, input *{{$obj.StructName}}) (*{{$obj.StructName}}, error)
-	 {{range $ofm := $obj.Primay}}
-	Get(ctx context.Context,{{GenFListIndex $ofm 2}}) (*{{$obj.StructName}}, error) 
-	Updates(ctx context.Context,{{GenFListIndex $ofm 2}}, input *{{$obj.StructName}}) error 
-	Delete(ctx context.Context, {{GenFListIndex $ofm 2}}) error 
-	{{end}}
-	QueryOne(ctx context.Context, opts ...GormOptionFunc) (*{{$obj.StructName}}, bool, error) 
-	QueryDefault(ctx context.Context, opts ...GormOptionFunc) ([]*{{$obj.StructName}}, int64, error) 
-}
 
 // GetTableName get sql table name.获取数据库名字
 func (obj *{{$obj.StructName}}Mgr) TableName() string {
@@ -129,14 +99,16 @@ func (obj *{{$obj.StructName}}Mgr) PreTableName(s string) string {
 		return result, err
 	}
 	// Updates 更新
-	func (obj *{{$obj.StructName}}Mgr) Updates(ctx context.Context,{{GenFListIndex $ofm 2}}, input *{{$obj.StructName}}) error {
-	if {{GenFListIndex $ofm 4}} == 0 {
-		return errors.New("id不能为空")
-	}
-	m := &{{$obj.StructName}}{
-		{{GenFListIndex $ofm 5}}: {{GenFListIndex $ofm 4}},
-	}
-	return obj.DB.WithContext(ctx).Model(m).Updates(*input).Error
+	func (obj *{{$obj.StructName}}Mgr) UpdatesBy{{GenFListIndex $ofm 5}}(ctx context.Context,{{GenFListIndex $ofm 2}}, input *{{$obj.StructName}}) error {
+		if {{GenFListIndex $ofm 4}} == 0 {
+			return errors.New("id不能为空")
+		}
+		m := &{{$obj.StructName}}{
+			{{GenFListIndex $ofm 5}}: {{GenFListIndex $ofm 4}},
+		}
+		return obj.Cache.Exec(ctx, obj.CacheKey{{GenFListIndex $ofm 5}}({{GenFListIndex $ofm 4}}), func(ctx context.Context) error {
+			return obj.DB.Model(m).Updates(*input).Error
+		})
 	}
 
 	// Delete By ID
@@ -144,7 +116,30 @@ func (obj *{{$obj.StructName}}Mgr) PreTableName(s string) string {
 		err := obj.DB.WithContext(ctx).Delete(&{{$obj.StructName}}{}, {{GenFListIndex $ofm 4}}).Error
 		return err
 	}
+	// CacheKey{{GenFListIndex $ofm 5}} CacheKey generate by ids	
+	func (obj *{{$obj.StructName}}Mgr) CacheKey{{GenFListIndex $ofm 5}}({{GenFListIndex $ofm 2}}) string {
+		return strings.Join([]string{obj.TableName(), "{{GenFListIndex $ofm 4}}", utils.AsString({{GenFListIndex $ofm 4}})}, "_")
+	}
 {{end}}
+
+ {{range $ofm := $obj.Index}}
+	// Updates 更新
+	func (obj *{{$obj.StructName}}Mgr) UpdatesBy{{GenFListIndex $ofm 5}}(ctx context.Context,{{GenFListIndex $ofm 2}}, input *{{$obj.StructName}}) error {
+		if {{GenFListIndex $ofm 4}} == 0 {
+			return errors.New("id不能为空")
+		}
+		m := &{{$obj.StructName}}{
+			{{GenFListIndex $ofm 5}}: {{GenFListIndex $ofm 4}},
+		}
+		return obj.Cache.Exec(ctx, obj.CacheKey{{GenFListIndex $ofm 5}}({{GenFListIndex $ofm 4}}), func(ctx context.Context) error {
+			return obj.DB.Model(m).Updates(*input).Error
+		})
+	}
+	// CacheKey{{GenFListIndex $ofm 5}} CacheKey generate by ids	
+	func (obj *{{$obj.StructName}}Mgr) CacheKey{{GenFListIndex $ofm 5}}({{GenFListIndex $ofm 2}}) string {
+		return strings.Join([]string{obj.TableName(), "{{GenFListIndex $ofm 4}}", utils.AsString({{GenFListIndex $ofm 4}})}, "_")
+	}
+ {{end}}
 
 
 // create 创建
@@ -170,14 +165,23 @@ func (obj *{{$obj.StructName}}Mgr) QueryDefault(ctx context.Context, opts ...Gor
 	return list, cnt, err
 }
 
-//QueryOne 查询单个
+//QueryDefault 查询单个
 func (obj *{{$obj.StructName}}Mgr) QueryOne(ctx context.Context, opts ...GormOptionFunc) error {
-	value := GetScanObjCtx(ctx)
-	err := obj.query(obj.DB.WithContext(ctx), opts...).First(value).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return errors.ErrIdCanNotFound
+	value := mcontext.GetScanObjCtx(ctx)
+	Q := obj.query(obj.DB.WithContext(ctx), opts...)
+	cache_key := ""
+	// 缓存只适用于单行全列的情况
+	if k, _ := Q.Get("cache_key"); len(opts) == 1 && k != nil {
+		cache_key = utils.AsString(k)
+		Q = Q.Select("*")
 	}
-	return err
+	return obj.Cache.Get(ctx, cache_key, func(ctx context.Context) error {
+		err := Q.Model(&{{$obj.StructName}}{}).First(value).Error
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.ErrIdCanNotFound
+		}
+		return err
+	})
 }
 
 func (obj *{{$obj.StructName}}Mgr) query(db *gorm.DB, opts ...GormOptionFunc) *gorm.DB {
@@ -278,6 +282,9 @@ func (opt *{{$obj.StructName}}Mgr) Filter(para *{{$obj.StructName}}ReqParams) Go
 			db = db.Scopes(opt.WithSelect(para.Fields...))
 			if para.PageNum > 0 && para.PageSize > 0 {
 				db = db.Limit(para.PageSize).Offset((para.PageNum - 1) * para.PageSize)
+			} else {
+				// default set 100
+				db = db.Limit(100)
 			}
 			if para.Query != nil {
 			{{range $oem := $obj.Em}}
