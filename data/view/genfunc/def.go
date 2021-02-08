@@ -175,7 +175,7 @@ func (obj *{{$obj.StructName}}Mgr) QueryOne(ctx context.Context, opts ...GormOpt
 		cache_key = utils.AsString(k)
 		Q = Q.Select("*")
 	}
-	return obj.Cache.Get(ctx, cache_key, func(ctx context.Context) error {
+	return obj.Cache.Query(ctx, cache_key, func(ctx context.Context) error {
 		err := Q.Model(&{{$obj.StructName}}{}).First(value).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.ErrIdCanNotFound
