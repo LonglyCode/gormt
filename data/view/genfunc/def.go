@@ -92,12 +92,6 @@ func (obj *{{$obj.StructName}}Mgr) PreTableName(s string) string {
 }
 
  {{range $ofm := $obj.Primay}}
- 	 // Get 获取
-	func (obj *{{$obj.StructName}}Mgr) Get(ctx context.Context,{{GenFListIndex $ofm 2}}) (*{{$obj.StructName}}, error) {
-		result := &{{$obj.StructName}}{}	
-		err := obj.DB.WithContext(ctx).Where("{{GenFListIndex $ofm 3}}", {{GenFListIndex $ofm 4}}).First(&result).Error
-		return result, err
-	}
 	// Updates 更新
 	func (obj *{{$obj.StructName}}Mgr) UpdatesBy{{GenFListIndex $ofm 5}}(ctx context.Context,{{GenFListIndex $ofm 2}}, input *{{$obj.StructName}}) error {
 		if {{GenFListIndex $ofm 4}} == 0 {
@@ -107,7 +101,7 @@ func (obj *{{$obj.StructName}}Mgr) PreTableName(s string) string {
 			{{GenFListIndex $ofm 5}}: {{GenFListIndex $ofm 4}},
 		}
 		return obj.Cache.Exec(ctx, obj.CacheKey{{GenFListIndex $ofm 5}}({{GenFListIndex $ofm 4}}), func(ctx context.Context) error {
-			return obj.DB.Model(m).Updates(*input).Error
+			return obj.DB.WithContext(ctx).Model(m).Updates(*input).Error
 		})
 	}
 
@@ -132,7 +126,7 @@ func (obj *{{$obj.StructName}}Mgr) PreTableName(s string) string {
 			{{GenFListIndex $ofm 5}}: {{GenFListIndex $ofm 4}},
 		}
 		return obj.Cache.Exec(ctx, obj.CacheKey{{GenFListIndex $ofm 5}}({{GenFListIndex $ofm 4}}), func(ctx context.Context) error {
-			return obj.DB.Model(m).Updates(*input).Error
+			return obj.DB.WithContext(ctx).Model(m).Updates(*input).Error
 		})
 	}
 	// CacheKey{{GenFListIndex $ofm 5}} CacheKey generate by ids	
@@ -166,8 +160,7 @@ func (obj *{{$obj.StructName}}Mgr) QueryDefault(ctx context.Context, opts ...Gor
 }
 
 //QueryDefault 查询单个
-func (obj *{{$obj.StructName}}Mgr) QueryOne(ctx context.Context, opts ...GormOptionFunc) error {
-	value := mcontext.GetScanObjCtx(ctx)
+func (obj *{{$obj.StructName}}Mgr) QueryOne(ctx context.Context, value interface{}, opts ...GormOptionFunc) error {
 	Q := obj.query(obj.DB.WithContext(ctx), opts...)
 	cache_key := ""
 	// 缓存只适用于单行全列的情况
@@ -175,7 +168,7 @@ func (obj *{{$obj.StructName}}Mgr) QueryOne(ctx context.Context, opts ...GormOpt
 		cache_key = utils.AsString(k)
 		Q = Q.Select("*")
 	}
-	return obj.Cache.Query(ctx, cache_key, func(ctx context.Context) error {
+	return obj.Cache.Query(ctx, cache_key, value, func(ctx context.Context) error {
 		err := Q.Model(&{{$obj.StructName}}{}).First(value).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.ErrIdCanNotFound
