@@ -254,10 +254,15 @@ func (opt *{{$obj.StructName}}Mgr) Filter(para *{{$obj.StructName}}ReqParams) Go
 		if para != nil {
 			db = db.Scopes(opt.WithSelect(para.Fields...))
 			if para.PageNum > 0 && para.PageSize > 0 {
-				db = db.Limit(para.PageSize).Offset((para.PageNum - 1) * para.PageSize)
-			} else {
-				// default set 100
-				db = db.Limit(100)
+				if para.PageNum*para.PageSize > 1000 {
+					// 不允许大于1000量
+					db = db.Limit(1000)
+				} else {
+					db = db.Limit(para.PageSize).Offset((para.PageNum - 1) * para.PageSize)
+				}
+			} else if !para.Export {
+				// 非导出，也是限制 1000
+				db = db.Limit(1000)
 			}
 			if para.Query != nil {
 			{{range $oem := $obj.Em}}
