@@ -126,12 +126,8 @@ func (obj *{{$obj.StructName}}Mgr) Create(ctx context.Context, input *{{$obj.Str
 // QueryDefault 查询列表 
 func (obj *{{$obj.StructName}}Mgr) QueryDefault(ctx context.Context, value interface{}, opts ...GormOptionFunc) (int64, error) {
 	var cnt int64
-	// for count
-	Q := obj.query(ctx, opts...)
-	Q.Model(&{{$obj.StructName}}{}).Offset(-1).Find(value).Count(&cnt)
-	// for list
-	Q = obj.query(ctx, opts...)
-	err := Q.Model(&{{$obj.StructName}}{}).Order("update_time desc").Find(value).Error
+	obj.query(ctx, opts...).Offset(-1).Find(value).Count(&cnt)
+	err := obj.query(ctx, opts...).Order("update_time desc").Find(value).Error
 	return cnt, err
 }
 
