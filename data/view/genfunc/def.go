@@ -94,7 +94,7 @@ func (obj *{{$obj.StructName}}Mgr) PreTableName(s string) string {
  {{range $ofm := $obj.Primay}}
 	// Updates 更新
 	func (obj *{{$obj.StructName}}Mgr) Updates(ctx context.Context, input *{{$obj.StructName}}, opt GormOptionFunc) error {
-		Q := obj.query(ctx, opt)
+		Q := opt(obj.DB.WithContext(ctx).Model(&{{$obj.StructName}}{}))
 		key := ""
 		if k, _ := Q.InstanceGet("cache_key"); k != nil {
 			key = utils.AsString(k)
@@ -123,24 +123,36 @@ func (obj *{{$obj.StructName}}Mgr) Create(ctx context.Context, input *{{$obj.Str
 	return input, nil
 }
 
+
+type {{CapLowercase $obj.StructName}}Q struct {
+	Mgr  *{{$obj.StructName}}Mgr
+	opts []GormOptionFunc
+}
+
+func (obj *{{$obj.StructName}}Mgr) Q() *{{CapLowercase $obj.StructName}}Q {
+	return &{{CapLowercase $obj.StructName}}Q{
+		Mgr: obj,
+	}
+}
+
 // QueryDefault 查询列表 
-func (obj *{{$obj.StructName}}Mgr) QueryDefault(ctx context.Context, value interface{}, opts ...GormOptionFunc) (int64, error) {
+func (obj *{{CapLowercase $obj.StructName}}Q) List(ctx context.Context, value interface{}) (int64, error) {
 	var cnt int64
-	obj.query(ctx, opts...).Offset(-1).Find(value).Count(&cnt)
-	err := obj.query(ctx, opts...).Order("update_time desc").Find(value).Error
+	obj.query(ctx, obj.opts...).Offset(-1).Find(value).Count(&cnt)
+	err := obj.query(ctx, obj.opts...).Order("update_time desc").Find(value).Error
 	return cnt, err
 }
 
 //QueryDefault 查询单个
-func (obj *{{$obj.StructName}}Mgr) QueryOne(ctx context.Context, value interface{}, opts ...GormOptionFunc) error {
-	Q := obj.query(ctx, opts...)
+func (obj *{{CapLowercase $obj.StructName}}Q) One(ctx context.Context, value interface{}) error {
+	Q := obj.query(ctx, obj.opts...)
 	cache_key := ""
 	// 缓存只适用于单行全列的情况
-	if k, _ := Q.Get("cache_key"); len(opts) == 1 && k != nil {
+	if k, _ := Q.Get("cache_key"); len(obj.opts) == 1 && k != nil {
 		cache_key = utils.AsString(k)
 		Q = Q.Select("*")
 	}
-	return obj.Cache.Query(ctx, cache_key, value, func(ctx context.Context) error {
+	return obj.Mgr.Cache.Query(ctx, cache_key, value, func(ctx context.Context) error {
 		err := Q.First(value).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.ErrIdCanNotFound
@@ -149,25 +161,27 @@ func (obj *{{$obj.StructName}}Mgr) QueryOne(ctx context.Context, value interface
 	})
 }
 
-func (obj *{{$obj.StructName}}Mgr) query(ctx context.Context, opts ...GormOptionFunc) *gorm.DB {
-	db := obj.DB.WithContext(ctx).Model(&{{$obj.StructName}}{})
+func (obj *{{CapLowercase $obj.StructName}}Q) query(ctx context.Context, opts ...GormOptionFunc) *gorm.DB {
+	db := obj.Mgr.DB.WithContext(ctx).Model(&{{$obj.StructName}}{})
 	for _, f := range opts {
 		db = f(db)
 	}
 	return db
 }
 
-func (obj *{{$obj.StructName}}Mgr) WithSelect(strings ...string) GormOptionFunc {
-	return func(db *gorm.DB) *gorm.DB {
+func (obj *{{CapLowercase $obj.StructName}}Q) Select(strings ...string) *{{CapLowercase $obj.StructName}}Q {
+	fn := func(db *gorm.DB) *gorm.DB {
 		if len(strings) > 0 {
 			var ss []string
 			for _, s := range strings {
-				ss = append(ss, obj.PreTableName(s))
+				ss = append(ss, obj.Mgr.PreTableName(s))
 			}
 			db = db.Select(ss)
 		}
 		return db
 	}
+	obj.opts = append(obj.opts, fn)
+	return obj
 }
 
 type {{$obj.StructName}}ReqParams struct {
@@ -203,49 +217,57 @@ type {{$obj.StructName}}Params struct {
 
 //////////////////////////option case ////////////////////////////////////////////
 {{range $oem := $obj.Em}}
-// With{{$oem.ColStructName}} {{$oem.ColName}}获取 {{$oem.Notes}}
-func (obj *{{$obj.StructName}}Mgr) With{{$oem.ColStructName}}({{CapLowercase $oem.ColStructName}} {{$oem.Type}}) GormOptionFunc {
-	return func(db *gorm.DB) *gorm.DB {
-		db = db.Where(obj.PreTableName("{{$oem.ColName}} = ?"), {{CapLowercase $oem.ColStructName}})
+// {{$oem.ColStructName}} {{$oem.ColName}}获取 {{$oem.Notes}}
+func (obj *{{CapLowercase $obj.StructName}}Q) {{$oem.ColStructName}}({{CapLowercase $oem.ColStructName}} {{$oem.Type}}) *{{CapLowercase $obj.StructName}}Q {
+	fn := func(db *gorm.DB) *gorm.DB {
+		db = db.Where(obj.Mgr.PreTableName("{{$oem.ColName}} = ?"), {{CapLowercase $oem.ColStructName}})
 		return db
 	} 
+	obj.opts = append(obj.opts, fn)
+	return obj
 }
 {{$t := HasSuffix $oem.ColStructName "Time"}}
 {{$id := HasSuffix $oem.ColStructName "ID"}}
 {{$str := IsType $oem.Type "string"}}
 {{if $t}}
-// With{{$oem.ColStructName}}Interval {{$oem.ColName}}获取时间区间 {{$oem.Notes}}
-func (obj *{{$obj.StructName}}Mgr) With{{$oem.ColStructName}}Interval(interval []interface{}) GormOptionFunc {
-	return func(db *gorm.DB) *gorm.DB {
-		db = db.Where(obj.PreTableName("{{$oem.ColName}} between ? and ?"), interval[0], interval[1])
+// {{$oem.ColStructName}}Interval {{$oem.ColName}}获取时间区间 {{$oem.Notes}}
+func (obj *{{CapLowercase $obj.StructName}}Q) {{$oem.ColStructName}}Interval(interval []interface{}) *{{CapLowercase $obj.StructName}}Q {
+	fn := func(db *gorm.DB) *gorm.DB {
+		db = db.Where(obj.Mgr.PreTableName("{{$oem.ColName}} between ? and ?"), interval[0], interval[1])
 		return db
 	}
+	obj.opts = append(obj.opts, fn)
+	return obj
 }
 {{else if $id}}
-// With{{$oem.ColStructName}}In {{$oem.ColName}}获取in {{$oem.Notes}}
-func (obj *{{$obj.StructName}}Mgr) With{{$oem.ColStructName}}In({{CapLowercase $oem.ColStructName}}s ...{{$oem.Type}}) GormOptionFunc {
-	return func(db *gorm.DB) *gorm.DB {
+// {{$oem.ColStructName}}In {{$oem.ColName}}获取in {{$oem.Notes}}
+func (obj *{{CapLowercase $obj.StructName}}Q) {{$oem.ColStructName}}In({{CapLowercase $oem.ColStructName}}s ...{{$oem.Type}}) *{{CapLowercase $obj.StructName}}Q {
+	fn := func(db *gorm.DB) *gorm.DB {
 		if len({{CapLowercase $oem.ColStructName}}s) > 0 {
-			db = db.Where(obj.PreTableName("{{$oem.ColName}} in (?)"), {{CapLowercase $oem.ColStructName}}s)
+			db = db.Where(obj.Mgr.PreTableName("{{$oem.ColName}} in (?)"), {{CapLowercase $oem.ColStructName}}s)
 		}
 		return db
 	} 
+	obj.opts = append(obj.opts, fn)
+	return obj
 }
 {{else if $str}}
-// With{{$oem.ColStructName}}Like {{$oem.ColName}}获取like {{$oem.Notes}}
-func (obj *{{$obj.StructName}}Mgr) With{{$oem.ColStructName}}Like({{CapLowercase $oem.ColStructName}} {{$oem.Type}}) GormOptionFunc {
-	return func(db *gorm.DB) *gorm.DB {
-		db = db.Where(obj.PreTableName("{{$oem.ColName}} like ?"), "%"+{{CapLowercase $oem.ColStructName}}+"%")
+// {{$oem.ColStructName}}Like {{$oem.ColName}}获取like {{$oem.Notes}}
+func (obj *{{CapLowercase $obj.StructName}}Q) {{$oem.ColStructName}}Like({{CapLowercase $oem.ColStructName}} {{$oem.Type}}) *{{CapLowercase $obj.StructName}}Q {
+	fn := func(db *gorm.DB) *gorm.DB {
+		db = db.Where(obj.Mgr.PreTableName("{{$oem.ColName}} like ?"), "%"+{{CapLowercase $oem.ColStructName}}+"%")
 		return db
 	}
+	obj.opts = append(obj.opts, fn)
+	return obj
 }
 {{end}}
 {{end}}
 
-func (opt *{{$obj.StructName}}Mgr) Filter(para *{{$obj.StructName}}ReqParams) GormOptionFunc {
-	return func(db *gorm.DB) *gorm.DB {
+func (opt *{{CapLowercase $obj.StructName}}Q) Filter(para *{{$obj.StructName}}ReqParams) *{{CapLowercase $obj.StructName}}Q {
+	fn := func(db *gorm.DB) *gorm.DB {
 		if para != nil {
-			db = db.Scopes(opt.WithSelect(para.Fields...))
+			opt.Select(para.Fields...)
 			if para.PageNum > 0 && para.PageSize > 0 {
 				if para.PageNum*para.PageSize > 1000 {
 					// 不允许大于1000量
@@ -264,24 +286,24 @@ func (opt *{{$obj.StructName}}Mgr) Filter(para *{{$obj.StructName}}ReqParams) Go
 				{{$str := IsType $oem.Type "string"}}
 				{{if $str}}
 				if para.Query.{{$oem.ColStructName}} != "" {
-					db = db.Scopes(opt.With{{$oem.ColStructName}}(para.Query.{{$oem.ColStructName}}))
+					opt.{{$oem.ColStructName}}(para.Query.{{$oem.ColStructName}})
 				} 
 				if para.Query.{{$oem.ColStructName}}Like != "" {
-					db = db.Scopes(opt.With{{$oem.ColStructName}}Like(para.Query.{{$oem.ColStructName}}Like))
+					opt.{{$oem.ColStructName}}Like(para.Query.{{$oem.ColStructName}}Like)
 				} 
 				{{else}}
 				if para.Query.{{$oem.ColStructName}} != 0 {
-					db = db.Scopes(opt.With{{$oem.ColStructName}}(para.Query.{{$oem.ColStructName}}))
+					opt.{{$oem.ColStructName}}(para.Query.{{$oem.ColStructName}})
 				} 
 				{{end}}
 				{{if $t}} 
 				if len(para.Query.{{$oem.ColStructName}}Interval) > 0 {
-					db = db.Scopes(opt.With{{$oem.ColStructName}}Interval(para.Query.{{$oem.ColStructName}}Interval))
+					opt.{{$oem.ColStructName}}Interval(para.Query.{{$oem.ColStructName}}Interval)
 				}
 				{{end}}
 				{{if $id}} 
 				if len(para.Query.{{$oem.ColStructName}}In) > 0 {
-					db = db.Scopes(opt.With{{$oem.ColStructName}}In(para.Query.{{$oem.ColStructName}}In...))
+					opt.{{$oem.ColStructName}}In(para.Query.{{$oem.ColStructName}}In...)
 				}
 				{{end}}
 
@@ -290,6 +312,8 @@ func (opt *{{$obj.StructName}}Mgr) Filter(para *{{$obj.StructName}}ReqParams) Go
 		}
 		return db
 	}
+	opt.opts = append(opt.opts, fn)
+	return opt
 }
  //////////////////////////primary index case ////////////////////////////////////////////
 `
