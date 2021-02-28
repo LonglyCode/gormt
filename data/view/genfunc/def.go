@@ -124,18 +124,15 @@ func (obj *{{$obj.StructName}}Mgr) Create(ctx context.Context, input *{{$obj.Str
 }
 
 // QueryDefault 查询列表 
-func (obj *{{$obj.StructName}}Mgr) QueryDefault(ctx context.Context, opts ...GormOptionFunc) ([]*{{$obj.StructName}}, int64, error) {
-	var (
-		list []*{{$obj.StructName}}
-		cnt  int64
-	)
+func (obj *{{$obj.StructName}}Mgr) QueryDefault(ctx context.Context, value interface{}, opts ...GormOptionFunc) (int64, error) {
+	var cnt int64
 	// for count
 	Q := obj.query(ctx, opts...)
-	Q.Offset(-1).Find(&list).Count(&cnt)
-	// fore list
+	Q.Model(&{{$obj.StructName}}{}).Offset(-1).Find(value).Count(&cnt)
+	// for list
 	Q = obj.query(ctx, opts...)
-	err := Q.Order("update_time desc").Find(&list).Error
-	return list, cnt, err
+	err := Q.Model(&{{$obj.StructName}}{}).Order("update_time desc").Find(value).Error
+	return cnt, err
 }
 
 //QueryDefault 查询单个
