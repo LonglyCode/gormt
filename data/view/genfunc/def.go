@@ -93,7 +93,8 @@ func (obj *{{$obj.StructName}}Mgr) PreTableName(s string) string {
 
  {{range $ofm := $obj.Primay}}
 	// Updates 更新
-	func (obj *{{$obj.StructName}}Mgr) Updates(ctx context.Context, input *{{$obj.StructName}}, opt GormOptionFunc) error {
+	func (obj *{{$obj.StructName}}Mgr) Updates(ctx context.Context, input *{{$obj.StructName}}, q *{{CapLowercase $obj.StructName}}Q) error {
+		Q := q.Query(ctx)
 		Q := opt(obj.DB.WithContext(ctx).Model(&{{$obj.StructName}}{}))
 		key := ""
 		if k, _ := Q.InstanceGet("cache_key"); k != nil {
@@ -138,14 +139,14 @@ func (obj *{{$obj.StructName}}Mgr) Q() *{{CapLowercase $obj.StructName}}Q {
 // QueryDefault 查询列表 
 func (obj *{{CapLowercase $obj.StructName}}Q) List(ctx context.Context, value interface{}) (int64, error) {
 	var cnt int64
-	obj.query(ctx, obj.opts...).Offset(-1).Find(value).Count(&cnt)
-	err := obj.query(ctx, obj.opts...).Order("update_time desc").Find(value).Error
+	obj.Query(ctx).Offset(-1).Find(value).Count(&cnt)
+	err := obj.Query(ctx).Order("update_time desc").Find(value).Error
 	return cnt, err
 }
 
 //QueryDefault 查询单个
 func (obj *{{CapLowercase $obj.StructName}}Q) One(ctx context.Context, value interface{}) error {
-	Q := obj.query(ctx, obj.opts...)
+	Q := obj.Query(ctx)
 	cache_key := ""
 	// 缓存只适用于单行全列的情况
 	if k, _ := Q.Get("cache_key"); len(obj.opts) == 1 && k != nil {
@@ -161,9 +162,9 @@ func (obj *{{CapLowercase $obj.StructName}}Q) One(ctx context.Context, value int
 	})
 }
 
-func (obj *{{CapLowercase $obj.StructName}}Q) query(ctx context.Context, opts ...GormOptionFunc) *gorm.DB {
+func (obj *{{CapLowercase $obj.StructName}}Q) Query(ctx context.Context) *gorm.DB {
 	db := obj.Mgr.DB.WithContext(ctx).Model(&{{$obj.StructName}}{})
-	for _, f := range opts {
+	for _, f := range obj.opts {
 		db = f(db)
 	}
 	return db
