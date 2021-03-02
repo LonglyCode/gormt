@@ -95,7 +95,6 @@ func (obj *{{$obj.StructName}}Mgr) PreTableName(s string) string {
 	// Updates 更新
 	func (obj *{{$obj.StructName}}Mgr) Updates(ctx context.Context, input *{{$obj.StructName}}, q *{{CapLowercase $obj.StructName}}Q) error {
 		Q := q.Query(ctx)
-		Q := opt(obj.DB.WithContext(ctx).Model(&{{$obj.StructName}}{}))
 		key := ""
 		if k, _ := Q.InstanceGet("cache_key"); k != nil {
 			key = utils.AsString(k)
