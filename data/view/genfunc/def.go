@@ -264,55 +264,60 @@ func (obj *{{CapLowercase $obj.StructName}}Q) {{$oem.ColStructName}}Like({{CapLo
 {{end}}
 {{end}}
 
-func (opt *{{CapLowercase $obj.StructName}}Q) Filter(para *{{$obj.StructName}}ReqParams) *{{CapLowercase $obj.StructName}}Q {
+func (obj *{{CapLowercase $obj.StructName}}Q) Pagination(para *{{$obj.StructName}}ReqParams) *{{CapLowercase $obj.StructName}}Q {
 	fn := func(db *gorm.DB) *gorm.DB {
-		if para != nil {
-			opt.Select(para.Fields...)
-			if para.PageNum > 0 && para.PageSize > 0 {
-				if para.PageNum*para.PageSize > 1000 {
-					// 不允许大于1000量
-					db = db.Limit(1000)
-				} else {
-					db = db.Limit(para.PageSize).Offset((para.PageNum - 1) * para.PageSize)
-				}
-			} else if !para.Export {
-				// 非导出，也是限制 1000
+		if para.PageNum > 0 && para.PageSize > 0 {
+			if para.PageNum*para.PageSize > 1000 {
+				// 不允许大于1000量
 				db = db.Limit(1000)
+			} else {
+				db = db.Limit(para.PageSize).Offset((para.PageNum - 1) * para.PageSize)
 			}
-			if para.Query != nil {
-			{{range $oem := $obj.Em}}
-				{{$t := HasSuffix $oem.ColStructName "Time"}}
-				{{$id := HasSuffix $oem.ColStructName "ID"}}
-				{{$str := IsType $oem.Type "string"}}
-				{{if $str}}
-				if para.Query.{{$oem.ColStructName}} != "" {
-					opt.{{$oem.ColStructName}}(para.Query.{{$oem.ColStructName}})
-				} 
-				if para.Query.{{$oem.ColStructName}}Like != "" {
-					opt.{{$oem.ColStructName}}Like(para.Query.{{$oem.ColStructName}}Like)
-				} 
-				{{else}}
-				if para.Query.{{$oem.ColStructName}} != 0 {
-					opt.{{$oem.ColStructName}}(para.Query.{{$oem.ColStructName}})
-				} 
-				{{end}}
-				{{if $t}} 
-				if len(para.Query.{{$oem.ColStructName}}Interval) > 0 {
-					opt.{{$oem.ColStructName}}Interval(para.Query.{{$oem.ColStructName}}Interval)
-				}
-				{{end}}
-				{{if $id}} 
-				if len(para.Query.{{$oem.ColStructName}}In) > 0 {
-					opt.{{$oem.ColStructName}}In(para.Query.{{$oem.ColStructName}}In...)
-				}
-				{{end}}
-
-			{{end}}
-			}
+		} else if !para.Export {
+			// 非导出，也是限制 1000
+			db = db.Limit(1000)
 		}
 		return db
 	}
-	opt.opts = append(opt.opts, fn)
+	obj.opts = append(obj.opts, fn)
+	return obj
+}
+
+func (opt *{{CapLowercase $obj.StructName}}Q) Filter(para *{{$obj.StructName}}ReqParams) *{{CapLowercase $obj.StructName}}Q {
+	if para != nil {
+		opt.Select(para.Fields...)
+		opt.Pagination(para)	
+		if para.Query != nil {
+		{{range $oem := $obj.Em}}
+			{{$t := HasSuffix $oem.ColStructName "Time"}}
+			{{$id := HasSuffix $oem.ColStructName "ID"}}
+			{{$str := IsType $oem.Type "string"}}
+			{{if $str}}
+			if para.Query.{{$oem.ColStructName}} != "" {
+				opt.{{$oem.ColStructName}}(para.Query.{{$oem.ColStructName}})
+			} 
+			if para.Query.{{$oem.ColStructName}}Like != "" {
+				opt.{{$oem.ColStructName}}Like(para.Query.{{$oem.ColStructName}}Like)
+			} 
+			{{else}}
+			if para.Query.{{$oem.ColStructName}} != 0 {
+				opt.{{$oem.ColStructName}}(para.Query.{{$oem.ColStructName}})
+			} 
+			{{end}}
+			{{if $t}} 
+			if len(para.Query.{{$oem.ColStructName}}Interval) > 0 {
+				opt.{{$oem.ColStructName}}Interval(para.Query.{{$oem.ColStructName}}Interval)
+			}
+			{{end}}
+			{{if $id}} 
+			if len(para.Query.{{$oem.ColStructName}}In) > 0 {
+				opt.{{$oem.ColStructName}}In(para.Query.{{$oem.ColStructName}}In...)
+			}
+			{{end}}
+
+		{{end}}
+		}
+	}
 	return opt
 }
  //////////////////////////primary index case ////////////////////////////////////////////
