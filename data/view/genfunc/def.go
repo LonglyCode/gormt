@@ -267,7 +267,7 @@ func (obj *{{CapLowercase $obj.StructName}}Q) {{$oem.ColStructName}}Like({{CapLo
 func (obj *{{CapLowercase $obj.StructName}}Q) Pagination(para *{{$obj.StructName}}ReqParams) *{{CapLowercase $obj.StructName}}Q {
 	fn := func(db *gorm.DB) *gorm.DB {
 		if para.PageNum > 0 && para.PageSize > 0 {
-			if para.PageNum*para.PageSize > 1000 {
+			if para.PageSize > 1000 {
 				// 不允许大于1000量
 				db = db.Limit(1000)
 			} else {
