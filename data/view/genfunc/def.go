@@ -19,53 +19,10 @@ var {{.StructName}}Columns = struct { {{range $em := .Em}}
 package model
 import (
 	"gorm.io/gorm"
-	glog "gorm.io/gorm/logger"
 )
-
-var globalIsRelated bool = true  // 全局预加载
 
 type GormOptionFunc func(*gorm.DB) *gorm.DB
 
-// prepare for other
-type _BaseMgr struct {
-	*gorm.DB
-}
-
-// GetDB get gorm.DB info
-func (obj *_BaseMgr) GetDB() *gorm.DB {
-	return Session(obj.DB, ctx)
-}
-
-type options struct {
-	query map[string]interface{}
-}
-
-// Option overrides behavior of Connect.
-type Option interface {
-	apply(*options)
-}
-
-type optionFunc func(*options)
-
-func (f optionFunc) apply(o *options) {
-	f(o)
-}
-
-type scanObj struct{}
-
-// NewScanObj 创建返回
-func NewScanObj(ctx context.Context, o interface{}) context.Context {
-	return context.WithValue(ctx, scanObj{}, o)
-}
-
-// GetScanObjCtx 从上下文中获取跟踪ID
-func GetScanObjCtx(ctx context.Context) interface{} {
-	v := ctx.Value(scanObj{})
-	if v != nil {
-		return v
-	}
-	return nil
-}
 `
 
 	genlogic = `
