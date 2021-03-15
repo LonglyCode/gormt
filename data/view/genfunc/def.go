@@ -23,6 +23,11 @@ import (
 
 type GormOptionFunc func(*gorm.DB) *gorm.DB
 
+type Cache interface {
+	Query(ctx context.Context, key string, value interface{}, query func(ctx context.Context) error) error
+	Exec(ctx context.Context, key string, exec func(ctx context.Context) error) error
+}
+
 `
 
 	genlogic = `
@@ -30,7 +35,7 @@ type GormOptionFunc func(*gorm.DB) *gorm.DB
 	{{$obj := .}}{{$list := $obj.Em}}
 type {{$obj.StructName}}Mgr struct {
 	DB *gorm.DB
-	Cache *cache.Cache
+	Cache cache.Cache
 }
 
 var {{$obj.StructName}}Set = wire.NewSet(wire.Struct(new({{$obj.StructName}}Mgr), "*"))
