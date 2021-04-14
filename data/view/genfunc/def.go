@@ -205,9 +205,7 @@ func (obj *{{CapLowercase $obj.StructName}}Q) {{$oem.ColStructName}}Interval(int
 // {{$oem.ColStructName}}In {{$oem.ColName}}获取in {{$oem.Notes}}
 func (obj *{{CapLowercase $obj.StructName}}Q) {{$oem.ColStructName}}In({{CapLowercase $oem.ColStructName}}s ...{{$oem.Type}}) *{{CapLowercase $obj.StructName}}Q {
 	fn := func(db *gorm.DB) *gorm.DB {
-		if len({{CapLowercase $oem.ColStructName}}s) > 0 {
-			db = db.Where(obj.Mgr.PreTableName("{{$oem.ColName}} in (?)"), {{CapLowercase $oem.ColStructName}}s)
-		}
+		db = db.Where(obj.Mgr.PreTableName("{{$oem.ColName}} in (?)"), {{CapLowercase $oem.ColStructName}}s)
 		return db
 	} 
 	obj.opts = append(obj.opts, fn)
